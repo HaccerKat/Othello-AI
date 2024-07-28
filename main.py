@@ -43,17 +43,18 @@ def make_move(grid, legal_moves, turn_colour, human_player, x = 9, y = 9):
 
 
     data += str(turn_colour) + str(human_player) + str(x) + str(y)
-    command = ['./engine']
+    # Use ./engine when using Linux
+    command = ['./engine.exe']
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     input_bytes = data.encode()
     # Pass the input data to the c++ file and capture the output
     stdout, stderr = process.communicate(input=input_bytes)
     board_string = stdout.decode()
-    print("Data: ", data)
-    print("Colours: ", turn_colour, human_player)
-    print("Coordinates: ", x, y)
-    print("Len: ", len(board_string))
-    print("Str: ", board_string)
+    # print("Data: ", data)
+    # print("Colours: ", turn_colour, human_player)
+    # print("Coordinates: ", x, y)
+    # print("Len: ", len(board_string))
+    # print("Str: ", board_string)
     if board_string == "Game Over":
         return 0
     else:
@@ -64,7 +65,7 @@ def make_move(grid, legal_moves, turn_colour, human_player, x = 9, y = 9):
                 if grid[i][j] == '*':
                     legal_moves.append((i, j))
     
-    print_grid(grid)
+    # print_grid(grid)
     return 1
 
 def draw_grid(grid):
