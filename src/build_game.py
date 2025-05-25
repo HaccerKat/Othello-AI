@@ -1,4 +1,6 @@
 import random
+import os
+import sys
 from sys import platform
 import subprocess
 import pygame
@@ -30,6 +32,11 @@ def add_text(text, font_size, colour, coordinate):
 def add_standard_text(text, shift):
     add_text(text, 40, WHITE, ((size + width) / 2, sq_size * (shift + 1)))
 
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    base_path = getattr(sys, '_MEIPASS', os.path.dirname(os.path.abspath(sys.executable)))
+    return os.path.join(base_path, relative_path)
+
 # x, y = 9 is -1 in the cpp program -> used when there are no legal moves
 def make_move(grid, legal_moves, turn_colour, human_player, x = 9, y = 9):
     data = ""
@@ -44,7 +51,7 @@ def make_move(grid, legal_moves, turn_colour, human_player, x = 9, y = 9):
 
 
     data += str(turn_colour) + str(human_player) + str(x) + str(y)
-    command = ['./engine.exe'] if platform == 'win32' else ['./engine']
+    command = [resource_path('engine.exe')] if platform == 'win32' else ['./engine']
     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     input_bytes = data.encode()
     # Pass the input data to the c++ file and capture the output
