@@ -2,7 +2,6 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
-import torchvision.models as models
 
 def load_136bit_samples(filename):
     with open(filename, 'rb') as f:
@@ -53,8 +52,9 @@ inputs, labels = load_136bit_samples("datasets/data_" + nnue_name + ".bin")
 
 dataset = Dataset(inputs, labels)
 training_data, test_data = torch.utils.data.random_split(dataset, [0.8, 0.2])
-train_dataloader = DataLoader(training_data, batch_size=64)
-test_dataloader = DataLoader(test_data, batch_size=64)
+batch_size = 64
+train_dataloader = DataLoader(training_data, batch_size=batch_size)
+test_dataloader = DataLoader(test_data, batch_size=batch_size)
 
 class NeuralNetwork(nn.Module):
     def __init__(self):
@@ -79,7 +79,6 @@ print(f"Using {device} device")
 model = NeuralNetwork().to(device)
 
 learning_rate = 0.3
-batch_size = 64
 
 loss_fn = nn.BCELoss()
 optimizer = torch.optim.SGD(model.parameters(), lr = learning_rate)
@@ -124,7 +123,6 @@ def test_loop(dataloader, model, loss_fn):
   correct /= size
   print(f"Test Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg Loss: {test_loss:>8f} \n")
 #   print(f"Avg Loss: {test_loss:>8f} \n")
-  optimizer = torch.optim.SGD(model.parameters(), lr = learning_rate)
   return test_loss
 
 patience = 2

@@ -30,9 +30,7 @@ def load_model(model_class, checkpoint_path, device=None, **model_kwargs):
     model.load_state_dict(torch.load(checkpoint_path, map_location=device))
     model.to(device)
     model.eval()
-
     return model
-
 
 model = load_model(NeuralNetwork, 'model_weights.pth')
 # nnue_layer = [0] * 129  # 2 bits per square * 64 squares + 1 player bit

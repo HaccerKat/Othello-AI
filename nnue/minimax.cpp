@@ -1,4 +1,5 @@
-#include <random>
+// Used for non-Codingame submissions: depth is fully searched if elapsed time < response time before minimax is called
+
 #include <chrono>
 #include <utility>
 #include <algorithm>
@@ -19,6 +20,11 @@ void minimax(U position, int depth, T alpha, T beta, auto start, double response
         bottom_depth++;
         return;
     }
+
+    // if (depth == 0 || position->find_if_game_ends()) {
+    //     bottom_depth++;
+    //     return;
+    // }
 
     position->find_next_boards();
     std::sort(position->next_boards.begin(), position->next_boards.end(), [&](std::pair<U, std::pair<int, int>> a, std::pair<U, std::pair<int, int>> b) {
@@ -59,15 +65,13 @@ void minimax(U position, int depth, T alpha, T beta, auto start, double response
 }
 
 template <typename U, typename T>
-std::pair<int, int> get_best_move(U position, double response_time, bool probabilities) {
+std::pair<int, int> get_best_move(U position, double response_time, bool probabilities, bool dbg) {
     position->find_next_boards();
     auto start = std::chrono::high_resolution_clock::now();
     int depth = 1;
     T eval = position->DRAW;
     cnt = 0, cntcomps = 0;
     std::pair<int, int> move = {-1, 0};
-    // cout << "INIT Eval: " << position->get_eval() << "\n";
-    // std::cout << (std::chrono::high_resolution_clock::now() - start).count() << "\n";
     while (std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start).count() < response_time && depth < 64) {
         bottom_depth = 0;
         T best_eval = position->get_player() ? position->BLACK_WINS : position->WHITE_WINS;
@@ -88,7 +92,6 @@ std::pair<int, int> get_best_move(U position, double response_time, bool probabi
         }
 
         minimax(position, depth, position->WHITE_WINS, position->BLACK_WINS, start, response_time);
-        // cout << best_eval << "\n";
         depth++, eval = best_eval;
     }
 
@@ -130,6 +133,7 @@ std::pair<int, int> get_best_move(U position, double response_time, bool probabi
         // }   
     }
 
+    // first 6 moves are randomized
     if (position->get_sum_points() < 10) {
         int p = rnd(0, position->next_boards.size() - 1);
         move = position->next_boards[p].second;
@@ -137,14 +141,20 @@ std::pair<int, int> get_best_move(U position, double response_time, bool probabi
 
     // depths.push_back(depth);
     // cout << size(depths) << "\n";
-    // std::cout << "Depth: " << depth << "\n";
-    // std::cout << "Count Visited Nodes: " << cnt << "\n";
-    // std::cout << "Count Computations: " << cntcomps << "\n";
-    // std::cout << "Count Visited Nodes at Highest Depth: " << bottom_depth << "\n";
-    // std::cout << "Eval: " << eval << "\n";
+    if (dbg) {
+        auto end = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end - start;
+        std::cerr << "Depth: " << depth << "\n";
+        std::cerr << "Count Visited Nodes: " << cnt << "\n";
+        std::cerr << "Count Computations: " << cntcomps << "\n";
+        std::cerr << "Count Visited Nodes at Highest Depth: " << bottom_depth << "\n";
+        std::cerr << "Eval: " << eval << "\n";
+        std::cerr << "Elapsed Time: " << elapsed.count() << "\n";
+    }
+
     return move;
 }
 
 // template void minimax<Board*, int>(Board*, int, int, int, auto, double);
-template std::pair<int, int> get_best_move<Board*, int>(Board*, double, bool);
-template std::pair<int, int> get_best_move<Experimental_Board*, double>(Experimental_Board*, double, bool);
+template std::pair<int, int> get_best_move<Board*, int>(Board*, double, bool, bool);
+template std::pair<int, int> get_best_move<Experimental_Board*, float>(Experimental_Board*, double, bool, bool);

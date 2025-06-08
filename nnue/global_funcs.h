@@ -1,4 +1,4 @@
 #pragma once
 
-double rnd_double(double l, double r);
+float rnd_float(float l, float r);
 int rnd(int l, int r);

@@ -23,7 +23,7 @@
 // 1. A decent softmax initial for the current eval is eval[i] / 50
 // 2. Training on game outcomes is likely superior since it gives that long-term outlook. The argument that probabilities don't represent true outcomes is countered by the fact that evals do the same and that opponent bots are not perfect either. The only goal is to train a NNUE that beats the current static eval.
 
-constexpr int INPUT_BITS = 129;
+constexpr int INPUT_BITS = 128;
 constexpr int OUTPUT_BITS = 2;
 constexpr int TOTAL_BITS = 136;
 constexpr int BYTES_PER_SAMPLE = TOTAL_BITS / 8;
@@ -40,21 +40,17 @@ Position set_position(Board *board) {
         }
     }
 
-    result[BYTES_PER_SAMPLE - 1] += board->get_player() * (1 << 7);
-    // board->print();    
-    // cout << "----------------------------------------\n";
+    // result[BYTES_PER_SAMPLE - 1] += board->get_player() * (1 << 7);
     return result;
 }
 
-// Produces about 38.5 positions per game and about 308 per function call
 std::pair<std::vector<Position>, int> generate_game() {
     // . - empty square
     // * - valid move square
     // 0 - dark piece
     // 1 - light piece
     // used to avoid many duplicates of opening positions
-    int inv_probability = 1e4;
-    int x_random = rnd(1, 3), y_random = rnd(1, 20);
+    int inv_probability = 1e5;
 
     char grid[8][8];
     memset(grid, '.', sizeof(grid));
@@ -65,49 +61,39 @@ std::pair<std::vector<Position>, int> generate_game() {
     std::vector<Position> game;
     int player = rnd(0, 1);
     while (!board->find_if_game_ends()) {
-        // Cannot be used with multithreading
-        // board->print();
-        // cout << "************************************\n";
-
         // rnd() in board.h
-        int sum_points = board->get_sum_points();
+        // int sum_points = board->get_sum_points();
         // game.push_back(set_position(board));
-        for (int i = 0; i < 4; i++) {
-            int test = rnd(0, inv_probability);
-            if (test == 0) {
-                game.push_back(set_position(board));
+        for (int i = 0; i < 2; i++) { // swap colours
+            for (int j = 0; j < 2; j++) { // flip horizontally
+                for (int k = 0; k < 4; i++) { // rotate 90 degrees
+                    int test = rnd(0, inv_probability);
+                    if (test == 0) {
+                        game.push_back(set_position(board));
+                    }
+
+                    board->rot_90_cw();
+                }
+
+                board->horizontal_mirror_image();
             }
 
-            board->rot_90_cw();
+            board->swap_colour();
         }
 
-        board->horizontal_mirror_image();
-        for (int i = 0; i < 4; i++) {
-            int test = rnd(0, inv_probability);
-            if (test == 0) {
-                game.push_back(set_position(board));
-            }
-
-            board->rot_90_cw();
-        }
-
-        board->horizontal_mirror_image();
         board->find_next_boards();
-        auto [x, y] = get_best_move(board, 0.015, player ? y_random : x_random);
+        auto [x, y] = get_best_move(board, 0.01);
         if (player) y_random = std::max(y_random - 1, 1);
         else x_random = std::max(x_random - 1, 1);
         board = board->advance_move(x, y);
         inv_probability /= 5, player ^= 1;
     }
 
-    // cout << size(game) << "\n";
-
-    // cout << "\n";
     // 0 - white, 1 - draw, 2 - black
-    int winner = 2 - board->get_winner_num();
+    int winner = 2 - board->get_winner_num(), idx = 0;
     for (Position &position : game) {
-        // dbg("HERE");
-        position[BYTES_PER_SAMPLE - 1] += winner;
+        position[BYTES_PER_SAMPLE - 1] += (idx < 8 ? winner : 2 - winner);
+        idx = (idx + 1) % 16;
     }
 
     // for (Position position : game) {        
@@ -120,7 +106,6 @@ std::pair<std::vector<Position>, int> generate_game() {
     // }
 
     // cout << board->get_winner() << "\n";
-    // delete_tree(&board);
     delete original_board;
     return {game, winner};
 }
@@ -131,11 +116,11 @@ int32_t main() {
     const int num_games = 30000;
     int positions_generated = 0;
     auto start = std::chrono::steady_clock::now();
-    int black_wins = 0, draws = 0, white_wins = 0;
+    int black_wins = 0, draws = 0, white_wins = 0, generated_games = 0;
     
     std::string nnue_name;
     std::cin >> nnue_name;
-    std::ofstream fout("datasets/data_" + nnue_name + ".bin", std::ios::binary);
+    std::ofstream fout("/home/haccerkat/Documents/Programming/Projects/Othello-AI/nnue/datasets/data_" + nnue_name + ".bin", std::ios::binary);
     #pragma omp parallel for num_threads(num_threads)
     for (int i = 0; i < num_games; i++) {
         auto [game, winner] = generate_game();
@@ -144,7 +129,7 @@ int32_t main() {
             if (winner == 0) black_wins++;
             else if (winner == 1) draws++;
             else white_wins++;
-            
+            generated_games++;
             //append mode
             // ofstream fout("data.bin", ios::binary | ios::app);
             for (Position position : game) {
@@ -155,9 +140,9 @@ int32_t main() {
         positions_generated += size(game);
         auto now = std::chrono::steady_clock::now();
         double duration = std::chrono::duration<double>(now - start).count();
-        if ((i + 1) % 100 == 0) {
+        if (generated_games % 1000 == 0) {
             double hourly_positions_generation = 3600 / duration * positions_generated;
-            std::cout << "At Game " << i + 1 << "\n";
+            std::cout << "At Game " << generated_games << "\n";
             std::cout << "Hourly Positions Generation: " << (int)hourly_positions_generation << " positions\\hr\n";
             std::cout << "--------------------------------------------\n";
             std::cout << duration << "\n";

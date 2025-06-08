@@ -21,17 +21,7 @@ Board::~Board() {
 // 0 -> black, 1 -> white
 Board::Board(char gr[8][8], bool p) {
     memcpy(grid, gr, sizeof(grid));
-    memset(nnue_layer, 0, sizeof(nnue_layer));
     player = p;
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            int pos = 2 * (i * 8 + j);
-            if (grid[i][j] == '0') nnue_layer[pos] = 1;
-            if (grid[i][j] == '1') nnue_layer[pos + 1] = 1;
-        }
-    }
-
-    nnue_layer[128] = player;
 }
 
 void Board::print() const {
@@ -63,6 +53,15 @@ void Board::rot_90_cw() {
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
             grid[i][j] = temp[i][j];
+        }
+    }
+}
+
+void Board::swap_colour() {
+    for (int i = 0; i < 8; i++) {
+        for (int j = 0; j < 8; j++) {
+            if (grid[i][j] == '0') {grid[i][j] = '1';}
+            else if (grid[i][j] == '1') {grid[i][j] = '0';}
         }
     }
 }
