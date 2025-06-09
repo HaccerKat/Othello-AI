@@ -13,6 +13,7 @@ control_model.eval()
 experimental_model.eval()
 
 control_player = random.randint(0, 1)
+print("Control Player:", control_player)
 current_player = 0
 initial_player_board = 0x0000000810000000
 initial_opponent_board = 0x0000001008000000
@@ -26,9 +27,9 @@ start = time.perf_counter()
 board = Board(initial_player_board, initial_opponent_board, current_player)
 while not board.game_ends():
     if current_player == control_player:
-        (player_board, opponent_board) = mcts(board, control_model, False, True)
+        (player_board, opponent_board) = mcts(board, control_model, True, True)
     else:
-        (player_board, opponent_board) = mcts(board, experimental_model, False, True)
+        (player_board, opponent_board) = mcts(board, experimental_model, True, True)
     current_player = 1 - current_player
     board = Board(player_board, opponent_board, current_player)
 

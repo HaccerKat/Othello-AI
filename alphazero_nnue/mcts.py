@@ -1,4 +1,4 @@
-def mcts(root, model, debug=False, gameplay = False, num_simulations=100, exploration_constant=1.414):
+def mcts(root, model, debug=False, gameplay = False, num_simulations=100, exploration_constant=2):
     for i in range(num_simulations):
         node = root
         while not node.game_ends():
@@ -14,7 +14,8 @@ def mcts(root, model, debug=False, gameplay = False, num_simulations=100, explor
 
         node.backpropagate(model)
 
+    result = root.get_next_board(gameplay)
     if debug:
         root.print()
 
-    return root.get_next_board(gameplay)
+    return result

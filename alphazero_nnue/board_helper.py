@@ -1,4 +1,6 @@
 import torch
+import time
+import globals
 def print_board(board):
     for i in range(8):
         for j in range(8):
@@ -25,6 +27,14 @@ def horizontal_mirror_image(board):
         for j in range(8):
             if board >> (i * 8 + j) & 1:
                 flipped_board ^= (1 << (i * 8 + 7 - j))
+    return flipped_board
+
+def horizontal_mirror_image_policy(policy):
+    start = time.perf_counter()
+    policy = torch.fliplr(policy.reshape(8, 8)).reshape(-1)
+    end = time.perf_counter()
+    globals.state['time_eval_2'] += end - start
+    return policy
 
 def rot_90_cw(board):
     rotated_board = 0
@@ -33,6 +43,13 @@ def rot_90_cw(board):
             if board >> (i * 8 + j) & 1:
                 rotated_board ^= (1 << (j * 8 + 7 - i))
     return rotated_board
+
+def rot_90_cw_policy(policy):
+    start = time.perf_counter()
+    policy = torch.rot90(policy.reshape(8, 8), -1, (0, 1)).reshape(-1)
+    end = time.perf_counter()
+    globals.state['time_eval_2'] += end - start
+    return policy
 
 MASK_L = 0x0101010101010101
 MASK_R = 0x8080808080808080
@@ -77,6 +94,4 @@ def to_tensor(player_board, opponent_board):
     a = torch.tensor(a, dtype=torch.float32)
     b = (list(map(int, format(opponent_board, '064b'))))
     b = torch.tensor(b, dtype=torch.float32)
-    # scales (0, 1) to (-1, 1)
-    input_layer = torch.cat((a, b)) * 2 - 1
-    return input_layer
+    return torch.cat((a, b))

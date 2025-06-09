@@ -17,6 +17,8 @@ class Board:
         self.visited_count = 0 # N(s) and N(s, a) in PUCT
         self.sum_eval = 0 # Divide by visited_count to get Q(s, a) in PUCT
         self.mcts_policy = []
+        self.full_policy = np.zeros(64)
+        self.legal_moves = np.zeros(64)
 
     def print(self):
         print("Board State:")
@@ -26,13 +28,26 @@ class Board:
         print(f"Visited Count: {self.visited_count}")
         print(f"Sum Eval: {self.sum_eval}")
         print(f"Current Child: {self.current_child}")
+        print(f"MCTS Policy: {self.mcts_policy}")
+        test = []
+        test2 = []
+        for policy_value, move, child in self.next_boards:
+            test.append((policy_value, move))
+            test2.append(child.sum_eval / child.visited_count)
+        print(f"NN Policy: {test}")
+        print(f"NN Value Head: {test2}")
+        self.get_full_policy()
+        print(f"Full Policy: {self.full_policy}")
+        print("---------------------------------------------")
 
     def find_next_boards(self, model):
         tensor = bh.to_tensor(self.player_board, self.opponent_board)
 
         policy, self.value_head = model(tensor)
 
+        # print(policy)
         policy = policy.detach().numpy()
+        print(policy)
         self.value_head = self.value_head.item()
         empty_board = ~(self.player_board | self.opponent_board) & 0xFFFFFFFFFFFFFFFF
         legal = bh.find_legal_moves(self.player_board, self.opponent_board)
@@ -100,9 +115,13 @@ class Board:
     def select(self, exploration_constant):
         # PUCT selection
         max_puct = -1.0
+        sum_policy_value = 0.0
         new_board = None
         for policy_value, move, child in self.next_boards:
-            x = (child.sum_eval / child.visited_count) + exploration_constant * policy_value * math.sqrt(self.visited_count) / (1 + child.visited_count)
+            sum_policy_value += policy_value
+        for policy_value, move, child in self.next_boards:
+            # -child.sum_eval since we choose the move that makes it the worst for the opponent (player board and opponent board are swapped every move)
+            x = (-child.sum_eval / child.visited_count) + exploration_constant * policy_value / sum_policy_value * math.sqrt(self.visited_count) / (1 + child.visited_count)
             if x >= max_puct:
                 max_puct = x
                 new_board = child
@@ -150,13 +169,17 @@ class Board:
         return selection[2].player_board, selection[2].opponent_board
 
     def get_full_policy(self):
-        full_policy = np.zeros(64)
         index = 0
         sum_values = 0
         for policy_value, move, child in self.next_boards:
-            full_policy[move] += self.mcts_policy[index]
-            sum_values += full_policy[move]
+            self.full_policy[move] += self.mcts_policy[index]
+            self.legal_moves[move] = 1
+            sum_values += self.full_policy[move]
             index += 1
-        full_policy /= sum_values
-        return full_policy
+        if sum_values > 0:
+            self.full_policy /= sum_values
+        else:
+            # indicates a skip turn and not to add in dataset
+            self.full_policy[0] = -1
+        return self.full_policy
 

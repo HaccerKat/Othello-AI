@@ -1,8 +1,8 @@
 import random
-
 from nn import NeuralNetwork, load_model
 from mcts import mcts
 from board import Board
+from board_helper import horizontal_mirror_image, rot_90_cw
 import time
 import globals
 import math
@@ -28,8 +28,13 @@ def generate_game(identifier):
         initial_opponent_board = 0x00000001008000000
     board = Board(initial_player_board, initial_opponent_board, current_player)
     game = []
+    # prevent early game positions from flooding the dataset
+    p = 3125
     while not board.game_ends():
-        game.append(board)
+        if random.randint(0, p) == p:
+            game.append(board)
+
+        p //= 5
         if current_player == control_player:
             (player_board, opponent_board) = mcts(board, control_model)
         else:
@@ -45,23 +50,44 @@ def generate_game(identifier):
     # weight full games more in later generations (make epsilon closer to 1)
     epsilon = 0.5
     for position in game:
-        position_string = format(position.player_board, '064b') + format(position.opponent_board, '064b')
         policy = position.get_full_policy()
+        if policy[0] == -1:
+            # indicates a skip turn and not to add in dataset
+            continue
         winner = game_winner * (1 if position.player == current_player else -1)
         value = (1 - epsilon) * (position.sum_eval / position.visited_count) + epsilon * winner
-        return_game.append((position_string, policy, value))
+        # debugging experiment
+        # value = ((1 - epsilon) * (position.sum_eval / position.visited_count) + epsilon * winner) * -1
+        return_game.append((position.player_board, position.opponent_board, policy, value))
 
     return return_game
 
 num_games = int(input("Enter the number of games: "))
 start = time.perf_counter()
+current_game = 0
 
 open('datasets/features.bin', 'wb')
-open('datasets/labels.txt', 'w')
-for game in Pool().map(generate_game, range(num_games)):
-    for position in game:
-        position_string, policy, value = position
+open('datasets/policies.txt', 'w')
+open('datasets/values.txt', 'w')
+for game in Pool().imap(generate_game, range(num_games)):
+    for player_board, opponent_board, policy, value in game:
         with open('datasets/features.bin', 'ab') as f:
-            f.write(int(position_string, 2).to_bytes(16, byteorder='big'))
-        with open('datasets/labels.txt', 'a') as f:
-            f.write(' '.join(map(str, policy)) + ' ' + str(value) + '\n')
+            # since the size of the group of symmetrical boards is 8
+            # labels dealt with in the training loop to save disk space
+            for i in range(2):
+                for j in range(4):
+                    position_string = format(player_board, '064b') + format(opponent_board, '064b')
+                    byte_string = int(position_string, 2).to_bytes(16, byteorder='big')
+                    f.write(byte_string)
+                    player_board = rot_90_cw(player_board)
+                    opponent_board = rot_90_cw(opponent_board)
+                player_board = horizontal_mirror_image(player_board)
+                opponent_board = horizontal_mirror_image(opponent_board)
+
+        with open('datasets/policies.txt', 'a') as f:
+            f.write(' '.join(map(str, policy)) + '\n')
+        with open('datasets/values.txt', 'a') as f:
+            f.write(str(value) + '\n')
+    current_game += 1
+    if current_game % 10 == 0:
+        print("At Game #" + str(current_game))
