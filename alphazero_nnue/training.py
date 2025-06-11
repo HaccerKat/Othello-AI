@@ -2,7 +2,6 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from board_helper import horizontal_mirror_image_policy, rot_90_cw_policy
-
 def load_128bit_samples(filename):
     with open(filename, 'rb') as f:
         raw = np.frombuffer(f.read(), dtype=np.uint8)
@@ -62,9 +61,9 @@ dataset = Dataset(inputs, policies, values)
 training_data, test_data = torch.utils.data.random_split(dataset, [0.8, 0.2])
 
 BATCH_SIZE = 64
-LEARNING_RATE = 0.003
-train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE)
-test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE)
+LEARNING_RATE = 0.001
+train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, num_workers=16)
+test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, num_workers=16)
 
 from nn import NeuralNetwork, load_model
 with open('current_generation.txt', 'r') as f:
@@ -78,7 +77,7 @@ model = load_model(NeuralNetwork, 'models/model_weights_' + nn_name + '.pth')
 def loss_fn(prediction, target):
     # could play around with the proportions later
     # policy
-    loss = torch.nn.functional.cross_entropy(prediction[0], target[0])
+    loss = torch.sum(-target[0] * torch.nn.functional.log_softmax(prediction[0], dim=1), dim=1).mean()
     # value
     loss += torch.nn.functional.mse_loss(prediction[1], target[1])
     return loss
@@ -99,7 +98,7 @@ def train_loop(dataloader, model, loss_fn, optimizer):
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-        if (batch + 1) % 200 == 0:
+        if (batch + 1) % 2000 == 0:
             loss, current = loss.item(), batch * BATCH_SIZE
             print(f"loss: {loss:>7f} [{current:>5d}|{size:>5d}]")
 
@@ -119,7 +118,7 @@ def test_loop(dataloader, model, loss_fn):
     print(f"Avg Loss: {test_loss:>8f} \n")
     return test_loss
 
-patience = 2
+patience = 5
 epochs_without_improvement = 0
 best_val_loss = float("inf")
 epochs = 100

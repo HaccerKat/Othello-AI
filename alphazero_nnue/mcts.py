@@ -1,4 +1,4 @@
-def mcts(root, model, debug=False, gameplay = False, num_simulations=100, exploration_constant=2):
+def mcts(root, model, debug=False, gameplay = False, num_simulations=200, exploration_constant=2):
     for i in range(num_simulations):
         node = root
         while not node.game_ends():

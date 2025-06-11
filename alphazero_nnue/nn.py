@@ -13,7 +13,7 @@ class NeuralNetwork(nn.Module):
     def forward(self, x):
         x = F.relu(self.hidden1(x))
         x = F.relu(self.hidden2(x))
-        policy = F.softmax(self.policy(x), dim=0)
+        policy = self.policy(x)
         value = F.tanh(self.value(x))
         return policy, value
 

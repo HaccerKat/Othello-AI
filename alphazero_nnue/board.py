@@ -4,6 +4,7 @@ import numpy as np
 import random
 import time
 import globals
+import torch
 class Board:
     def __init__(self, player_board, opponent_board, player, parent = None):
         self.player_board = player_board
@@ -44,10 +45,9 @@ class Board:
         tensor = bh.to_tensor(self.player_board, self.opponent_board)
 
         policy, self.value_head = model(tensor)
-
-        # print(policy)
+        policy = torch.nn.functional.softmax(policy, dim=0)
         policy = policy.detach().numpy()
-        print(policy)
+
         self.value_head = self.value_head.item()
         empty_board = ~(self.player_board | self.opponent_board) & 0xFFFFFFFFFFFFFFFF
         legal = bh.find_legal_moves(self.player_board, self.opponent_board)
@@ -165,6 +165,8 @@ class Board:
         # random selection weighted using policy + dirichlet distribution
         # using lists are faster than numpy arrays when doing random selection only once
         selection = random.choices(self.next_boards, weights=mcts_policy, k=1)[0]
+        if bh.get_points(self.player_board) + bh.get_points(self.opponent_board) < 10:
+            selection = random.choices(self.next_boards, k=1)[0]
         # child board states of the selection
         return selection[2].player_board, selection[2].opponent_board
 

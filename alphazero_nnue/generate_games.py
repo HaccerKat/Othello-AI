@@ -4,13 +4,8 @@ from mcts import mcts
 from board import Board
 from board_helper import horizontal_mirror_image, rot_90_cw
 import time
-import globals
-import math
 from multiprocessing import Pool
 
-# think about letting the bot play older generations if training is unstable
-# features.bin -> file containing board states in a binary format
-# labels.txt -> file containing (policy, avg(MCTS averaged value, win/loss overall)) (65 numbers)
 nn_name_control = input("Enter the control's model name: ")
 nn_name_experimental = input("Enter the experimental's model name: ")
 control_model = load_model(NeuralNetwork, 'models/model_weights_' + nn_name_control + '.pth')
@@ -19,6 +14,7 @@ control_model.eval()
 experimental_model.eval()
 
 def generate_game(identifier):
+    print(identifier)
     control_player = random.randint(0, 1)
     current_player = 0
     initial_player_board = 0x0000000810000000
@@ -56,8 +52,6 @@ def generate_game(identifier):
             continue
         winner = game_winner * (1 if position.player == current_player else -1)
         value = (1 - epsilon) * (position.sum_eval / position.visited_count) + epsilon * winner
-        # debugging experiment
-        # value = ((1 - epsilon) * (position.sum_eval / position.visited_count) + epsilon * winner) * -1
         return_game.append((position.player_board, position.opponent_board, policy, value))
 
     return return_game
@@ -66,9 +60,9 @@ num_games = int(input("Enter the number of games: "))
 start = time.perf_counter()
 current_game = 0
 
-open('datasets/features.bin', 'wb')
-open('datasets/policies.txt', 'w')
-open('datasets/values.txt', 'w')
+# open('datasets/features.bin', 'wb')
+# open('datasets/policies.txt', 'w')
+# open('datasets/values.txt', 'w')
 for game in Pool().imap(generate_game, range(num_games)):
     for player_board, opponent_board, policy, value in game:
         with open('datasets/features.bin', 'ab') as f:
@@ -91,3 +85,4 @@ for game in Pool().imap(generate_game, range(num_games)):
     current_game += 1
     if current_game % 10 == 0:
         print("At Game #" + str(current_game))
+
