@@ -6,9 +6,7 @@ from multiprocessing import Pool
 import math
 import matplotlib.pyplot as plt
 from scipy.interpolate import make_interp_spline
-from scipy.stats import entropy
 import time
-from torch.utils.data import ConcatDataset
 
 from initialization import NeuralNetwork, Dataset
 import board_helper as bh
@@ -20,27 +18,20 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {device} device")
 
 learning_rate = 1e-3
-BUFFER_START = 5
+BUFFER_MODULO = 10
 # MCTS hyperparameters
-num_simulations = 100
-exploration_constant = math.sqrt(2)
+num_simulations = 200
+exploration_constant = 2.5
 
-buffer = None
-def training_loop(generation, model):
-    global buffer
+def training_loop(generation, buffer, model):
     inputs_list, policies_list, values_list = [], [], []
     current_game = 0
-    num_games = 16
-    num_positions = 0
 
-    sum_entropy = 0
-
+    num_games = 512
     jobs = [(i, model, model, num_simulations, exploration_constant) for i in range(num_games)]
     for game in Pool().imap(generate_game, jobs):
         for player_board, opponent_board, policy, value in game:
             # since the size of the group of symmetrical boards is 8
-            sum_entropy += entropy(policy)
-            num_positions += 1
             policy = torch.from_numpy(policy)
             for i in range(2):
                 for j in range(4):
@@ -60,36 +51,43 @@ def training_loop(generation, model):
         if current_game % 10 == 0:
             print("Generating Game #" + str(current_game))
 
-    avg_entropy = sum_entropy / num_positions
-
     inputs = torch.tensor(inputs_list).to(device)
     policies = torch.tensor(policies_list).to(device)
     values = torch.tensor(values_list).to(device)
+
     dataset = Dataset(inputs, policies, values)
     training_data, test_data = torch.utils.data.random_split(dataset, [0.8, 0.2])
-    if buffer is not None:
-        # eventually converges to len(buffer_dataset) = len(dataset)
-        buffer_dataset, buffer = torch.utils.data.random_split(buffer, [0.4, 0.6])
-        training_data = ConcatDataset([training_data, buffer_dataset])
 
     BATCH_SIZE = 64
     train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, shuffle=True)
     test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True)
 
+    buffer_train_dataloader, buffer_test_dataloader = None, None
+    # completely discard data from gens 0-19 (not used in buffer system)
+    if generation >= BUFFER_MODULO * 2:
+        buffer_training_data, buffer_test_data = torch.utils.data.random_split(buffer[generation % BUFFER_MODULO], [0.8, 0.2])
+        buffer_train_dataloader = DataLoader(buffer_training_data, batch_size=BATCH_SIZE, shuffle=True)
+        buffer_test_dataloader = DataLoader(buffer_test_data, batch_size=BATCH_SIZE, shuffle=True)
+
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9)
     best_test_loss = float("inf")
-    patience = 1
+    patience = 3
     patience_counter = 0
-    epochs = 5
+    epochs = 10
     best_nn = None
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
         train_loop(train_dataloader, model, optimizer, BATCH_SIZE)
-        policy_loss, value_loss, test_loss = test_loop(test_dataloader, model)
+        if buffer_train_dataloader is not None:
+            train_loop(buffer_train_dataloader, model, optimizer, BATCH_SIZE)
+
+        # buffer dataset is 0.8 times the size of the main dataset
+        test_loss = test_loop(test_dataloader, model)
+        if buffer_test_dataloader is not None:
+            test_loss += test_loop(buffer_test_dataloader, model) * 0.8
+            test_loss /= 1.8
         if test_loss < best_test_loss:
             best_test_loss = test_loss
-            best_policy_loss = policy_loss
-            best_value_loss = value_loss
             best_nn = model
             patience_counter = 0
         else:
@@ -98,14 +96,9 @@ def training_loop(generation, model):
                 break
 
     # assign to buffer
-    if generation < BUFFER_START:
-        pass
-    elif buffer is None:
-        buffer = dataset
-    else:
-        buffer = ConcatDataset([buffer, dataset])
+    buffer[generation % BUFFER_MODULO] = training_data
     torch.save(best_nn.state_dict(), 'models/model_weights_' + str(int(generation) + 1) + '.pth')
-    return best_nn, best_policy_loss, best_value_loss, best_test_loss, patience == patience_counter, avg_entropy
+    return best_nn, best_test_loss, patience == patience_counter
 
 PLOT_MODULO = 5
 def update_elo(generation):
@@ -155,46 +148,47 @@ def update_elo(generation):
     elo_gain = 400 * math.log10(1 / (1 - experimental_wr) - 1)
     return elo_gain
 
-# def plot_smooth(x, y, generation, name):
-#     xnew = np.linspace(min(x), max(x), 300)
-#     spl = make_interp_spline(x, y, k=3)
-#     power_smooth = spl(xnew)
-#     plt.plot(xnew, power_smooth)
-#     if name == 'elo':
-#         plt.xlabel('Generation')
-#         plt.ylabel('Elo')
-#         plt.title('Elo vs. Generation')
-#     else:
-#         plt.xlabel('Generation')
-#         plt.ylabel('Validation Loss')
-#         plt.title('Validation Loss vs. Generation')
-#     plt.savefig('plots/' + name + '/generation_' + str(generation) + '.png')
-#     plt.clf()
-#     plt.close()
+def plot_smooth(x, y, generation, name):
+    xnew = np.linspace(min(x), max(x), 300)
+    spl = make_interp_spline(x, y, k=3)
+    power_smooth = spl(xnew)
+    plt.plot(xnew, power_smooth)
+    if name == 'elo':
+        plt.xlabel('Generation')
+        plt.ylabel('Elo')
+        plt.title('Elo vs. Generation')
+    else:
+        plt.xlabel('Generation')
+        plt.ylabel('Validation Loss')
+        plt.title('Validation Loss vs. Generation')
+    plt.savefig('plots/' + name + '/generation_' + str(generation) + '.png')
+    plt.clf()
+    plt.close()
 
-def plot(x, y, labels, generation, title, folder_name):
-    for i in range(len(y)):
-        plt.plot(x, y[i], label=labels[i])
-    plt.xlabel('Generation')
-    plt.ylabel(title)
-    plt.title(title + ' vs. Generation')
-    plt.savefig('plots/' + folder_name + '/generation_' + str(generation) + '.png')
+def plot(x, y, generation, name):
+    plt.plot(x, y)
+    if name == 'elo':
+        plt.xlabel('Generation')
+        plt.ylabel('Elo')
+        plt.title('Elo vs. Generation')
+    else:
+        plt.xlabel('Generation')
+        plt.ylabel('Validation Loss')
+        plt.title('Validation Loss vs. Generation')
+    plt.savefig('plots/' + name + '/generation_' + str(generation) + '.png')
     plt.clf()
     plt.close()
 
 start = time.perf_counter()
+buffer = [None] * BUFFER_MODULO
 generation = 0
 elo = 0
-
 patience_exceeded_counter = 0
 patience_exceeded_counter_limit = 5
-y_elo_list = [[0]]
+y_elo_list = [0]
 x_elo_list = [0]
-# total loss, policy loss, value loss
-y_validation_loss_list = [[], [], []]
-print(y_validation_loss_list)
-y_entropy_list = [[]]
-x_general_list = []
+y_validation_loss_list = []
+x_validation_loss_list = []
 
 model = NeuralNetwork().to(device)
 state_dict = model.state_dict()
@@ -203,7 +197,7 @@ torch.save(model.state_dict(), './models/model_weights_0.pth')
 # simulate 100 games every 10 generations for testing strength
 while True:
     print('---------------------------------' + "Training Generation " + str(generation + 1) + '---------------------------------')
-    bestNN, policy_loss, value_loss, test_loss, patience_exceeded, avg_entropy = training_loop(generation, model)
+    bestNN, test_loss, patience_exceeded = training_loop(generation, buffer, model)
     patience_exceeded_counter += patience_exceeded
     if patience_exceeded_counter >= patience_exceeded_counter_limit:
         print('---------------------------------' + "Patience Exceeded Counter Exceeded" + '---------------------------------')
@@ -216,18 +210,14 @@ while True:
         patience_exceeded_counter = 0
 
     generation += 1
-    x_general_list.append(generation)
-    y_validation_loss_list[0].append(test_loss)
-    y_validation_loss_list[1].append(policy_loss)
-    y_validation_loss_list[2].append(value_loss)
-    y_entropy_list[0].append(avg_entropy)
+    x_validation_loss_list.append(generation)
+    y_validation_loss_list.append(test_loss)
     if generation % PLOT_MODULO == 0 and generation > 0:
         elo += update_elo(generation)
         x_elo_list.append(generation)
-        y_elo_list[0].append(elo)
-        plot(x_elo_list, y_elo_list, ('Elo',), generation, 'Elo', 'elo')
-        plot(x_general_list, y_validation_loss_list, ('Loss', 'Policy Loss', 'Value Loss'), generation, 'Validation Loss', 'validation_loss')
-        plot(x_general_list, y_entropy_list, ('Entropy',), generation, 'Entropy', 'entropy')
+        y_elo_list.append(elo)
+        plot(x_elo_list, y_elo_list, generation, 'elo')
+        plot(x_validation_loss_list, y_validation_loss_list, generation, 'validation_loss')
     
     end = time.perf_counter()
     duration = end - start

@@ -159,8 +159,8 @@ class Board:
                 selection = self.next_boards[index]
             return selection[2].player_board, selection[2].opponent_board
 
-        alpha = min(1.0, 4.0 / len(self.mcts_policy))
-        epsilon = 0.25
+        alpha = min(1.0, 3.0 / len(self.mcts_policy))
+        epsilon = 0.4
         mcts_policy = (1 - epsilon) * np.array(self.mcts_policy) + epsilon * np.random.dirichlet(np.ones(len(self.mcts_policy)) * alpha)
         # random selection weighted using policy + dirichlet distribution
         # using lists are faster than numpy arrays when doing random selection only once
