@@ -19,7 +19,7 @@ from simulate_game_helper import simulate_game
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {device} device")
 
-learning_rate = 1e-3
+learning_rate = 3e-3
 BUFFER_START = 5
 # MCTS hyperparameters
 num_simulations = 100
@@ -30,7 +30,7 @@ def training_loop(generation, model):
     global buffer
     inputs_list, policies_list, values_list = [], [], []
     current_game = 0
-    num_games = 16
+    num_games = 288
     num_positions = 0
 
     sum_entropy = 0
@@ -63,6 +63,7 @@ def training_loop(generation, model):
     avg_entropy = sum_entropy / num_positions
 
     inputs = torch.tensor(inputs_list).to(device)
+    inputs = torch.reshape(inputs, (-1, 2, 8, 8))
     policies = torch.tensor(policies_list).to(device)
     values = torch.tensor(values_list).to(device)
     dataset = Dataset(inputs, policies, values)
@@ -78,9 +79,9 @@ def training_loop(generation, model):
 
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9)
     best_test_loss = float("inf")
-    patience = 1
+    patience = 2
     patience_counter = 0
-    epochs = 5
+    epochs = 7
     best_nn = None
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")

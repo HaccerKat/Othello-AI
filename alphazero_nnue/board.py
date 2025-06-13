@@ -43,10 +43,14 @@ class Board:
 
     def find_next_boards(self, model):
         tensor = bh.to_tensor(self.player_board, self.opponent_board)
-
+        tensor = torch.reshape(tensor, (1, 2, 8, 8))
+        # print(len(tensor))
+        # print(len(tensor[0]))
+        # print(len(tensor[0][0]))
         policy, self.value_head = model(tensor)
         policy = torch.nn.functional.softmax(policy, dim=0)
-        policy = policy.detach().numpy()
+        policy = policy[0].detach().numpy()
+        # print(policy)
 
         self.value_head = self.value_head.item()
         empty_board = ~(self.player_board | self.opponent_board) & 0xFFFFFFFFFFFFFFFF

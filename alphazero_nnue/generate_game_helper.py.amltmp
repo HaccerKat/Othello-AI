@@ -33,15 +33,14 @@ def generate_game(parameters):
     return_game = []
     # weight full games more in later generations (make epsilon closer to 1)
     epsilon = 0.5
-    if num_simulations > 512:
-        epsilon = 0.75
     for position in game:
         policy = position.get_full_policy()
         if policy[0] == -1:
             # indicates a skip turn and not to add in dataset
             continue
         winner = game_winner * (1 if position.player == current_player else -1)
-        value = (1 - epsilon) * (position.sum_eval / position.visited_count) + epsilon * winner
-        return_game.append((position.player_board, position.opponent_board, policy, value))
+        value_mcts = position.sum_eval / position.visited_count
+        return_game.append((position.player_board, position.opponent_board, policy, value_mcts))
+        return_game.append((position.player_board, position.opponent_board, policy, winner))
 
     return return_game

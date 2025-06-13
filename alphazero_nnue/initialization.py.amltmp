@@ -1,5 +1,7 @@
-import torch
 import torch.nn.functional as F
+import torch
+
+# ----------------------------------------- INITIALIZATION -----------------------------------------
 class NeuralNetwork(torch.nn.Module):
     # Need to experiment to find a better NN structure
     def __init__(self):
@@ -23,20 +25,21 @@ class NeuralNetwork(torch.nn.Module):
         value = F.tanh(self.value(y))
         return policy, value
 
-# device = "cuda" if torch.cuda.is_available() else "cpu"
-# print(f"Using {device} device")
-# model = NeuralNetwork().to(device)
+class Dataset(torch.utils.data.Dataset):
+    def __init__(self, inputs_uint8, policy, value, transform = None):
+        self.inputs_uint8 = inputs_uint8
+        self.policy = policy
+        self.value = value
+        self.transform = transform
 
-# state_dict = model.state_dict()
-# torch.save(model.state_dict(), './models/model_weights_1.pth')
+    def __len__(self):
+        return len(self.inputs_uint8)
 
-def load_model(model_class, checkpoint_path, device=None, **model_kwargs):
-    if device is None:
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    def __getitem__(self, idx):
+        inputs = self.inputs_uint8[idx].clone().detach().float()
+        policy = self.policy[idx].clone().detach()
+        value = self.value[idx].clone().detach()
+        if self.transform:
+            inputs = self.transform(inputs)
 
-    model = model_class(**model_kwargs)
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
-    model.to(device)
-    model.eval()
-    return model
-
+        return inputs, policy, value
