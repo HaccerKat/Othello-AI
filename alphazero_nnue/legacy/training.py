@@ -53,10 +53,10 @@ class Dataset(torch.utils.data.Dataset):
 
         return inputs, policy, value
 
-inputs = load_128bit_samples("datasets/features.bin")
+inputs = load_128bit_samples("../datasets/features.bin")
 n = len(inputs) // 8
-policies = load_policy("datasets/policies.txt", n)
-values = load_values("datasets/values.txt", n)
+policies = load_policy("../datasets/policies.txt", n)
+values = load_values("../datasets/values.txt", n)
 dataset = Dataset(inputs, policies, values)
 training_data, test_data = torch.utils.data.random_split(dataset, [0.8, 0.2])
 
@@ -65,8 +65,8 @@ LEARNING_RATE = 0.001
 train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, num_workers=16)
 test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, num_workers=16)
 
-from nn import NeuralNetwork, load_model
-with open('current_generation.txt', 'r') as f:
+from nn_init import NeuralNetwork, load_model
+with open('../current_generation.txt', 'r') as f:
     nn_name = f.readline()
 
 print(nn_name)

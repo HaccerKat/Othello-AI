@@ -1,5 +1,5 @@
 import random
-from nn import NeuralNetwork, load_model
+from nn_init import NeuralNetwork, load_model
 from mcts import mcts
 from board import Board
 import time

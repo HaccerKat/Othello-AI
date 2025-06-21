@@ -1,0 +1,101 @@
+[33mcommit 22c4a9ebf9c0837e698166358183c2daff4fd18e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author: HaccerKat <jiapengbai@gmail.com>
+Date:   Thu Jun 12 22:05:12 2025 -0700
+
+    testing CNNs
+
+[33mcommit b3242992c2abf27523878b39adffe9f6c7399b90[m
+Author: HaccerKat <jiapengbai@gmail.com>
+Date:   Wed Jun 11 17:57:53 2025 -0700
+
+    added more dataplots for analysis purposes
+
+[33mcommit accc705f60852aec56576831454ffb90dee8366d[m
+Author: HaccerKat <jiapengbai@gmail.com>
+Date:   Tue Jun 10 19:12:03 2025 -0700
+
+    added conda environment
+
+[33mcommit ea26f88dc047176728a59cc00a3141ec6e2d9305[m
+Author: HaccerKat <jiapengbai@gmail.com>
+Date:   Tue Jun 10 19:01:00 2025 -0700
+
+    created automatic system for training agent, created system to save data to be analyzed when run in the background
+
+[33mcommit a2e164152e027bbd54318a2942e1dce4fd92bbb0[m
+Author: HaccerKat <jiapengbai@gmail.com>
+Date:   Sun Jun 8 19:29:56 2025 -0700
+
+    fixed bugs in training, created some tests that successfully beat the original bot
+
+[33mcommit f7cfe6a861aafbfe7898dedb2350b73143719cfd[m
+Author: HaccerKat <jiapengbai@gmail.com>
+Date:   Sat Jun 7 17:22:34 2025 -0700
+
+    added quantization to NNUE, statisically tested quantization, made some small modifications, started a new experiment to try to train a bot alphazero style with no human knowledge, wrote everything up to beginning to test model training
+
+[33mcommit 2d65e2d1927d6ee8c5f4b8152acdc965b854c9b0[m
+Author: Peng Bai <38306748+HaccerKat@users.noreply.github.com>
+Date:   Sat May 24 22:22:35 2025 -0700
+
+    Create LICENSE
+
+[33mcommit 0fe3c96698f8a006e8853256d5f9b15286f60359[m
+Author: Peng Bai <jiapengbai@gmail.com>
+Date:   Sat May 24 22:09:25 2025 -0700
+
+    Built Windows executable
+
+[33mcommit f3c6ca7f07faf666793c4464a92df2104506ba7c[m
+Author: Peng Bai <38306748+HaccerKat@users.noreply.github.com>
+Date:   Sat May 24 21:34:32 2025 -0700
+
+    Delete nnue/legacy/Experimentation/engine.cpp:tests
+
+[33mcommit 9f595b4faacadb40624c54433e8ab9ff79200072[m
+Author: HaccerKat <jiapengbai@gmail.com>
+Date:   Sat May 24 21:16:34 2025 -0700
+
+    standardized code, fixed bugs in AB pruning code, improved current AB bot using sorting heuristic, mobility heuristic, adding code necessary for future nnue
+
+[33mcommit 0c5414db1e250e15d2fb175975f1345a1a3bd808[m
+Author: HaccerKat <jiapengbai@gmail.com>
+Date:   Sat May 24 21:14:55 2025 -0700
+
+    standardized code, fixed bugs in AB pruning code, improved current AB bot using sorting heuristic, mobility heuristic, adding code necessary for future nnue
+
+[33mcommit 17b90b517f04c4e89d380b5015d97bfd16857af9[m
+Author: heywhatdoing <jiapengbai@gmail.com>
+Date:   Sun Jul 28 11:24:45 2024 -0700
+
+    Added C++ dependencies
+
+[33mcommit 8fb17252656e5c77e3ddcd303c930ccf182ff8aa[m
+Author: Peng Bai <jiapengbai@gmail.com>
+Date:   Sat Jul 27 22:20:09 2024 -0700
+
+    Added Windows exe
+
+[33mcommit 299ec71ca1bb6adbece3d133581c4706ded05c53[m
+Author: Peng Bai <38306748+HaccerKat@users.noreply.github.com>
+Date:   Sat Jul 27 17:42:30 2024 -0700
+
+    Update README.md
+
+[33mcommit b7be6119911a9427ece639a4bef173224c993b2d[m
+Author: Peng Bai <38306748+HaccerKat@users.noreply.github.com>
+Date:   Sat Jul 27 17:42:12 2024 -0700
+
+    Update README.md
+
+[33mcommit 2fd3e0e8455adec9b88f38cea0a16f0f5a7f5489[m
+Author: haccerkat <jiapengbai@gmail.com>
+Date:   Sat Jul 27 17:32:07 2024 -0700
+
+    first upload of code
+
+[33mcommit 3a28c8fbb7acdbc0a087726f5a75c70348ad34cd[m
+Author: Peng Bai <38306748+HaccerKat@users.noreply.github.com>
+Date:   Sat Jul 27 17:28:00 2024 -0700
+
+    Create README.md

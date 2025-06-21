@@ -36,23 +36,26 @@ class Board:
             test.append((policy_value, move))
             test2.append(child.sum_eval / child.visited_count)
         print(f"NN Policy: {test}")
-        print(f"NN Value Head: {test2}")
+        print(f"MCTS Value Head: {test2}")
         self.get_full_policy()
         print(f"Full Policy: {self.full_policy}")
         print("---------------------------------------------")
 
     def find_next_boards(self, model):
+        # Be careful here, it seems like the tensor dimensions for MLP and CNN are different, but I don't know why
         tensor = bh.to_tensor(self.player_board, self.opponent_board)
         tensor = torch.reshape(tensor, (1, 2, 8, 8))
         # print(len(tensor))
         # print(len(tensor[0]))
         # print(len(tensor[0][0]))
         policy, self.value_head = model(tensor)
-        policy = torch.nn.functional.softmax(policy, dim=0)
+        policy = torch.nn.functional.softmax(policy, dim=1)
         policy = policy[0].detach().numpy()
-        # print(policy)
+        # if random.randint(0, 1000) < 1:
+        #     print(policy)
 
         self.value_head = self.value_head.item()
+        # print(self.value_head)
         empty_board = ~(self.player_board | self.opponent_board) & 0xFFFFFFFFFFFFFFFF
         legal = bh.find_legal_moves(self.player_board, self.opponent_board)
         for i in range(8):
@@ -83,6 +86,7 @@ class Board:
                     new_player_board = self.player_board ^ (1 << index) ^ flip
                     new_opponent_board = self.opponent_board ^ flip
                     self.next_boards.append((policy[index], index, Board(new_opponent_board, new_player_board, 1 - self.player, self)))
+                    # self.next_boards.append((policy, index, Board(new_opponent_board, new_player_board, 1 - self.player, self)))
 
         if not self.next_boards:
             self.next_boards.append((1, -1, Board(self.opponent_board, self.player_board, 1 - self.player, self)))
@@ -188,4 +192,3 @@ class Board:
             # indicates a skip turn and not to add in dataset
             self.full_policy[0] = -1
         return self.full_policy
-

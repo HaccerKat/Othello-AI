@@ -1,28 +1,28 @@
 import torch
 from torch.utils.data import DataLoader
-from nn import load_model
+from nn_init import load_model
 import numpy as np
-from multiprocessing import Pool
 import math
 import matplotlib.pyplot as plt
 from scipy.interpolate import make_interp_spline
 from scipy.stats import entropy
 import time
 from torch.utils.data import ConcatDataset
+import torch.multiprocessing as mp
+import os
+import json
 
-from initialization import NeuralNetwork, Dataset
+from nn_init import NeuralNetwork, Dataset
 import board_helper as bh
-from generate_game_helper import generate_game
+from generate_games import generate_game
 from training_helper import train_loop, test_loop
-from simulate_game_helper import simulate_game
+from simulate_games import simulate_game
+from multiprocessing_helper import execute_mp
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"Using {device} device")
-
-learning_rate = 3e-3
+learning_rate = 0.0002
 BUFFER_START = 5
 # MCTS hyperparameters
-num_simulations = 100
+num_simulations = 600
 exploration_constant = math.sqrt(2)
 
 buffer = None
@@ -30,13 +30,19 @@ def training_loop(generation, model):
     global buffer
     inputs_list, policies_list, values_list = [], [], []
     current_game = 0
-    num_games = 288
+    num_games = 240 # Should be multiple of number of pytorch utilized cores (real cores / 2)
     num_positions = 0
 
     sum_entropy = 0
 
+    model.eval()
+    model.share_memory()
     jobs = [(i, model, model, num_simulations, exploration_constant) for i in range(num_games)]
-    for game in Pool().imap(generate_game, jobs):
+
+    print("Generating Games...")
+    games = execute_mp(generate_game, jobs)
+
+    for game in games:
         for player_board, opponent_board, policy, value in game:
             # since the size of the group of symmetrical boards is 8
             sum_entropy += entropy(policy)
@@ -57,21 +63,23 @@ def training_loop(generation, model):
                 policy = bh.horizontal_mirror_image_policy(policy)
 
         current_game += 1
-        if current_game % 10 == 0:
-            print("Generating Game #" + str(current_game))
 
     avg_entropy = sum_entropy / num_positions
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     inputs = torch.tensor(inputs_list).to(device)
     inputs = torch.reshape(inputs, (-1, 2, 8, 8))
     policies = torch.tensor(policies_list).to(device)
     values = torch.tensor(values_list).to(device)
+
     dataset = Dataset(inputs, policies, values)
     training_data, test_data = torch.utils.data.random_split(dataset, [0.8, 0.2])
     if buffer is not None:
         # eventually converges to len(buffer_dataset) = len(dataset)
-        buffer_dataset, buffer = torch.utils.data.random_split(buffer, [0.4, 0.6])
+        buffer_dataset, buffer = torch.utils.data.random_split(buffer, [0.3, 0.7])
+        discard_dataset, keep_dataset = torch.utils.data.random_split(buffer_dataset, [0.34, 0.66])
         training_data = ConcatDataset([training_data, buffer_dataset])
+        buffer = ConcatDataset([buffer, keep_dataset])
 
     BATCH_SIZE = 64
     train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, shuffle=True)
@@ -79,9 +87,9 @@ def training_loop(generation, model):
 
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9)
     best_test_loss = float("inf")
-    patience = 2
+    patience = 1
     patience_counter = 0
-    epochs = 7
+    epochs = 2
     best_nn = None
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
@@ -114,12 +122,21 @@ def update_elo(generation):
     experimental_model = load_model(NeuralNetwork, 'models/model_weights_' + str(generation) + '.pth')
     current_game = 0
 
+    control_model.eval()
+    control_model.share_memory()
+    experimental_model.eval()
+    experimental_model.share_memory()
+
     sum_full_policy = np.zeros(64)
     sum_legal_moves = np.zeros(64)
-    num_games = 100
+    num_games = 120 # Should be multiple of number of pytorch utilized cores (real cores / 2)
     draws, control_wins, experimental_wins = 0, 0, 0
     jobs = [(i, control_model, experimental_model, num_simulations, exploration_constant) for i in range(num_games)]
-    for result, full_policy, legal_moves in Pool().imap(simulate_game, jobs):
+
+    print("Simulating Games...")
+    games = execute_mp(simulate_game, jobs)
+
+    for result, full_policy, legal_moves in games:
         if result == 0:
             draws += 1
         elif result == -1:
@@ -129,8 +146,6 @@ def update_elo(generation):
         current_game += 1
         sum_full_policy += full_policy
         sum_legal_moves += legal_moves
-        if current_game % 10 == 0:
-            print("Simulating Game #" + str(current_game))
 
     num_games -= draws
     experimental_wr = experimental_wins / num_games
@@ -183,54 +198,104 @@ def plot(x, y, labels, generation, title, folder_name):
     plt.clf()
     plt.close()
 
-start = time.perf_counter()
-generation = 0
-elo = 0
+def main():
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
+    os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
-patience_exceeded_counter = 0
-patience_exceeded_counter_limit = 5
-y_elo_list = [[0]]
-x_elo_list = [0]
-# total loss, policy loss, value loss
-y_validation_loss_list = [[], [], []]
-print(y_validation_loss_list)
-y_entropy_list = [[]]
-x_general_list = []
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using {device} device")
 
-model = NeuralNetwork().to(device)
-state_dict = model.state_dict()
-torch.save(model.state_dict(), './models/model_weights_0.pth')
-
-# simulate 100 games every 10 generations for testing strength
-while True:
-    print('---------------------------------' + "Training Generation " + str(generation + 1) + '---------------------------------')
-    bestNN, policy_loss, value_loss, test_loss, patience_exceeded, avg_entropy = training_loop(generation, model)
-    patience_exceeded_counter += patience_exceeded
-    if patience_exceeded_counter >= patience_exceeded_counter_limit:
-        print('---------------------------------' + "Patience Exceeded Counter Exceeded" + '---------------------------------')
-        learning_rate /= 2
-        if num_simulations <= 1000:
-            num_simulations *= 8
-            num_simulations //= 5
-        print("New Learning Rate: " + str(learning_rate))
-        print("New MCTS Number of Simulations: " + str(num_simulations))
+    torch.set_num_threads(1)
+    try:
+        with open('reload_model_data.json', 'r') as f:
+            json_data = json.load(f)
+            generation = json_data['generation']
+            elo = json_data['elo']
+            patience_exceeded_counter = json_data['patience_exceeded_counter']
+            y_elo_list = json_data['y_elo_list']
+            x_elo_list = json_data['x_elo_list']
+            y_validation_loss_list = json_data['y_validation_loss_list']
+            y_entropy_list = json_data['y_entropy_list']
+            x_general_list = json_data['x_general_list']
+            model = load_model(NeuralNetwork, 'models/model_weights_' + str(generation) + '.pth')
+    except (FileNotFoundError, json.JSONDecodeError):
+        generation = 0
+        elo = 0
         patience_exceeded_counter = 0
+        y_elo_list = [[0]]
+        x_elo_list = [0]
+        y_validation_loss_list = [[], [], []]
+        y_entropy_list = [[]]
+        x_general_list = []
+        model = NeuralNetwork().to(device)
+        torch.save(model.state_dict(), './models/model_weights_0.pth')
 
-    generation += 1
-    x_general_list.append(generation)
-    y_validation_loss_list[0].append(test_loss)
-    y_validation_loss_list[1].append(policy_loss)
-    y_validation_loss_list[2].append(value_loss)
-    y_entropy_list[0].append(avg_entropy)
-    if generation % PLOT_MODULO == 0 and generation > 0:
-        elo += update_elo(generation)
-        x_elo_list.append(generation)
-        y_elo_list[0].append(elo)
-        plot(x_elo_list, y_elo_list, ('Elo',), generation, 'Elo', 'elo')
-        plot(x_general_list, y_validation_loss_list, ('Loss', 'Policy Loss', 'Value Loss'), generation, 'Validation Loss', 'validation_loss')
-        plot(x_general_list, y_entropy_list, ('Entropy',), generation, 'Entropy', 'entropy')
-    
-    end = time.perf_counter()
-    duration = end - start
-    if duration >= 86400:
-        break
+    PATIENCE_EXCEEDED_COUNTER_LIMIT = 5
+    ELO_PATIENCE_EXCEEDED_LIMIT = 3
+    elo_patience = 0
+    while True:
+        start = time.perf_counter()
+        print('---------------------------------' + "Training Generation " + str(generation + 1) + '---------------------------------')
+        bestNN, policy_loss, value_loss, test_loss, patience_exceeded, avg_entropy = training_loop(generation, model)
+        model = bestNN
+        patience_exceeded_counter += patience_exceeded
+        if patience_exceeded_counter >= PATIENCE_EXCEEDED_COUNTER_LIMIT:
+            print('---------------------------------' + "Patience Exceeded Counter Exceeded" + '---------------------------------')
+            global learning_rate
+            global num_simulations
+            learning_rate /= 2
+            if num_simulations <= 1000:
+                num_simulations *= 8
+                num_simulations //= 5
+            print("New Learning Rate: " + str(learning_rate))
+            print("New MCTS Number of Simulations: " + str(num_simulations))
+            patience_exceeded_counter = 0
+
+        generation += 1
+        x_general_list.append(generation)
+        y_validation_loss_list[0].append(test_loss)
+        y_validation_loss_list[1].append(policy_loss)
+        y_validation_loss_list[2].append(value_loss)
+        y_entropy_list[0].append(avg_entropy)
+        if generation % PLOT_MODULO == 0 and generation > 0:
+            elo_gain = update_elo(generation)
+            elo += elo_gain
+            x_elo_list.append(generation)
+            y_elo_list[0].append(elo)
+            plot(x_elo_list, y_elo_list, ('Elo',), generation, 'Elo', 'elo')
+            plot(x_general_list, y_validation_loss_list, ('Loss', 'Policy Loss', 'Value Loss'), generation, 'Validation Loss', 'validation_loss')
+            plot(x_general_list, y_entropy_list, ('Entropy',), generation, 'Entropy', 'entropy')
+        
+        end = time.perf_counter()
+
+        # In case of a crash/Azure ML cuts off low priority cluster
+        json_data = {
+            "generation": generation,
+            "elo": elo,
+            "patience_exceeded_counter": patience_exceeded_counter,
+            "y_elo_list": y_elo_list,
+            "x_elo_list": x_elo_list,
+            "y_validation_loss_list": y_validation_loss_list,
+            "y_entropy_list": y_entropy_list,
+            "x_general_list": x_general_list,
+        }
+        
+        with open('reload_model_data.json', 'w') as f:
+            json.dump(json_data, f, indent = 4)
+
+        duration = end - start
+        print(f"Generation {generation} completed in {duration:.2f} seconds")
+        # if duration >= 86400:
+        #     break
+        if generation % PLOT_MODULO == 0 and elo < 0:
+            elo_patience += 1
+            if elo_patience >= ELO_PATIENCE_EXCEEDED_LIMIT:
+                break
+        
+        else:
+            elo_patience = 0
+
+if __name__ == "__main__":
+    mp.set_start_method("spawn", force=True)
+    main()

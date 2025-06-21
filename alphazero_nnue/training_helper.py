@@ -5,7 +5,9 @@ def loss_fn(prediction, target):
     # policy
     policy_loss = torch.sum(-target[0] * torch.nn.functional.log_softmax(prediction[0], dim=1), dim=1).mean()
     # value
-    value_loss = torch.nn.functional.mse_loss(prediction[1], target[1])
+    value_loss = 2 * torch.nn.functional.mse_loss(prediction[1], target[1])
+    # print(f"Prediction: {prediction[1]}")
+    # print(f"Target: {target[1]}")
     return policy_loss, value_loss
 
 def train_loop(dataloader, model, optimizer, BATCH_SIZE):
