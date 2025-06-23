@@ -17,7 +17,7 @@ import board_helper as bh
 from generate_games import generate_game
 from training_helper import train_loop, test_loop
 from simulate_games import simulate_game
-from multiprocessing_helper import execute_mp
+from multiprocessing_helper import execute_mp, execute_gpu
 
 learning_rate = 0.0002
 BUFFER_START = 5
@@ -26,7 +26,7 @@ num_simulations = 600
 exploration_constant = math.sqrt(2)
 
 buffer = None
-def training_loop(generation, model):
+def training_loop(generation, model, device):
     global buffer
     inputs_list, policies_list, values_list = [], [], []
     current_game = 0
@@ -40,7 +40,10 @@ def training_loop(generation, model):
     jobs = [(i, model, model, num_simulations, exploration_constant) for i in range(num_games)]
 
     print("Generating Games...")
-    games = execute_mp(generate_game, jobs)
+    if device == "cpu":
+        games = execute_mp(generate_game, jobs)
+    else:
+        games = execute_gpu(generate_game, jobs)
 
     for game in games:
         for player_board, opponent_board, policy, value in game:
@@ -66,11 +69,10 @@ def training_loop(generation, model):
 
     avg_entropy = sum_entropy / num_positions
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    inputs = torch.tensor(inputs_list).to(device)
+    inputs = torch.tensor(inputs_list)
     inputs = torch.reshape(inputs, (-1, 2, 8, 8))
-    policies = torch.tensor(policies_list).to(device)
-    values = torch.tensor(values_list).to(device)
+    policies = torch.tensor(policies_list)
+    values = torch.tensor(values_list)
 
     dataset = Dataset(inputs, policies, values)
     training_data, test_data = torch.utils.data.random_split(dataset, [0.8, 0.2])
@@ -117,7 +119,7 @@ def training_loop(generation, model):
     return best_nn, best_policy_loss, best_value_loss, best_test_loss, patience == patience_counter, avg_entropy
 
 PLOT_MODULO = 5
-def update_elo(generation):
+def update_elo(generation, device):
     control_model = load_model(NeuralNetwork, 'models/model_weights_' + str(generation - PLOT_MODULO) + '.pth')
     experimental_model = load_model(NeuralNetwork, 'models/model_weights_' + str(generation) + '.pth')
     current_game = 0
@@ -134,7 +136,10 @@ def update_elo(generation):
     jobs = [(i, control_model, experimental_model, num_simulations, exploration_constant) for i in range(num_games)]
 
     print("Simulating Games...")
-    games = execute_mp(simulate_game, jobs)
+    if device == "cpu":
+        games = execute_mp(simulate_game, jobs)
+    else:
+        games = execute_gpu(simulate_game, jobs)
 
     for result, full_policy, legal_moves in games:
         if result == 0:
@@ -199,14 +204,15 @@ def plot(x, y, labels, generation, title, folder_name):
     plt.close()
 
 def main():
-    os.environ["OMP_NUM_THREADS"] = "1"
-    os.environ["MKL_NUM_THREADS"] = "1"
-    os.environ["NUMEXPR_NUM_THREADS"] = "1"
+    # os.environ["OMP_NUM_THREADS"] = "1"
+    # os.environ["MKL_NUM_THREADS"] = "1"
+    # os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using {device} device")
+    torch.set_default_device(device)
 
-    torch.set_num_threads(1)
+    # torch.set_num_threads(1)
     try:
         with open('reload_model_data.json', 'r') as f:
             json_data = json.load(f)
@@ -237,7 +243,7 @@ def main():
     while True:
         start = time.perf_counter()
         print('---------------------------------' + "Training Generation " + str(generation + 1) + '---------------------------------')
-        bestNN, policy_loss, value_loss, test_loss, patience_exceeded, avg_entropy = training_loop(generation, model)
+        bestNN, policy_loss, value_loss, test_loss, patience_exceeded, avg_entropy = training_loop(generation, model, device)
         model = bestNN
         patience_exceeded_counter += patience_exceeded
         if patience_exceeded_counter >= PATIENCE_EXCEEDED_COUNTER_LIMIT:
@@ -259,7 +265,7 @@ def main():
         y_validation_loss_list[2].append(value_loss)
         y_entropy_list[0].append(avg_entropy)
         if generation % PLOT_MODULO == 0 and generation > 0:
-            elo_gain = update_elo(generation)
+            elo_gain = update_elo(generation, device)
             elo += elo_gain
             x_elo_list.append(generation)
             y_elo_list[0].append(elo)

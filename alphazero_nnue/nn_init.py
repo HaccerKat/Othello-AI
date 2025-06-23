@@ -25,46 +25,106 @@ import torch.nn.functional as F
 #         value = F.tanh(self.value(y))
 #         return policy, value
 
+# class NeuralNetwork(nn.Module):
+#     def __init__(self):
+#         super(NeuralNetwork, self).__init__()
+
+#         # Input: 8x8x2 (white pieces, black pieces, valid moves)
+#         # Conv layers - maintain 8x8 spatial resolution throughout
+#         self.conv1 = nn.Conv2d(2, 32, kernel_size=3, padding=1)
+#         self.conv2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
+#         self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+#         self.conv4 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+
+#         # Policy head - outputs 64 move probabilities
+#         self.policy_conv = nn.Conv2d(64, 2, kernel_size=1)  # 1x1 conv to reduce channels
+#         self.policy_fc = nn.Linear(2 * 8 * 8, 64)  # 64 possible moves
+
+#         # Value head - outputs single position evaluation
+#         self.value_conv = nn.Conv2d(64, 1, kernel_size=1)  # 1x1 conv to reduce channels
+#         self.value_fc1 = nn.Linear(1 * 8 * 8, 32)
+#         self.value_fc2 = nn.Linear(32, 1)
+
+#     def forward(self, x):
+#         # x shape: (batch_size, 2, 8, 8)
+
+#         # Feature extraction
+#         x = F.relu(self.conv1(x))  # (N, 32, 8, 8)
+#         x = F.relu(self.conv2(x))  # (N, 32, 8, 8)
+#         x = F.relu(self.conv3(x))  # (N, 64, 8, 8)
+#         x = F.relu(self.conv4(x))  # (N, 64, 8, 8)
+
+#         # Policy head
+#         policy = F.relu(self.policy_conv(x))  # (N, 2, 8, 8)
+#         policy = torch.flatten(policy, 1)  # (N, 128)
+#         policy = self.policy_fc(policy)  # (N, 64)
+#         # policy = F.log_softmax(policy, dim=1)
+
+#         # Value head
+#         value = F.relu(self.value_conv(x))  # (N, 1, 8, 8)
+#         value = torch.flatten(value, 1)  # (N, 64)
+#         value = F.relu(self.value_fc1(value))  # (N, 32)
+#         value = torch.tanh(self.value_fc2(value))  # (N, 1) - bounded [-1, 1]
+
+#         return policy, value
+    
+class BottleneckBlock(nn.Module):
+    def __init__(self, channels):
+        super(BottleneckBlock, self).__init__()
+        self.conv1 = nn.Conv2d(channels, channels, kernel_size=1)
+        self.bn1 = nn.BatchNorm2d(channels)
+
+        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(channels)
+
+        self.conv3 = nn.Conv2d(channels, channels, kernel_size=1)
+        self.bn3 = nn.BatchNorm2d(channels)
+
+    def forward(self, x):
+        identity = x
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = F.relu(self.bn2(self.conv2(out)))
+        out = self.bn3(self.conv3(out))
+        out += identity  # Skip connection
+        return F.relu(out)
+
+
 class NeuralNetwork(nn.Module):
     def __init__(self):
         super(NeuralNetwork, self).__init__()
 
-        # Input: 8x8x2 (white pieces, black pieces, valid moves)
-        # Conv layers - maintain 8x8 spatial resolution throughout
-        self.conv1 = nn.Conv2d(2, 32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(32, 32, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.conv4 = nn.Conv2d(64, 64, kernel_size=3, padding=1)
+        self.input_conv = nn.Conv2d(2, 1024, kernel_size=3, padding=1)
+        self.bn_input = nn.BatchNorm2d(1024)
 
-        # Policy head - outputs 64 move probabilities
-        self.policy_conv = nn.Conv2d(64, 2, kernel_size=1)  # 1x1 conv to reduce channels
-        self.policy_fc = nn.Linear(2 * 8 * 8, 64)  # 64 possible moves
+        # 16 bottleneck blocks → 48 conv layers
+        self.res_blocks = nn.Sequential(
+            *[BottleneckBlock(1024) for _ in range(16)]
+        )
 
-        # Value head - outputs single position evaluation
-        self.value_conv = nn.Conv2d(64, 1, kernel_size=1)  # 1x1 conv to reduce channels
-        self.value_fc1 = nn.Linear(1 * 8 * 8, 32)
+        # Policy head
+        self.policy_conv = nn.Conv2d(1024, 2, kernel_size=1)
+        self.policy_fc = nn.Linear(2 * 8 * 8, 64)
+
+        # Value head
+        self.value_conv = nn.Conv2d(1024, 1, kernel_size=1)
+        self.value_fc1 = nn.Linear(8 * 8 * 1, 32)
         self.value_fc2 = nn.Linear(32, 1)
 
     def forward(self, x):
-        # x shape: (batch_size, 2, 8, 8)
+        x = F.relu(self.bn_input(self.input_conv(x)))
 
-        # Feature extraction
-        x = F.relu(self.conv1(x))  # (N, 32, 8, 8)
-        x = F.relu(self.conv2(x))  # (N, 32, 8, 8)
-        x = F.relu(self.conv3(x))  # (N, 64, 8, 8)
-        x = F.relu(self.conv4(x))  # (N, 64, 8, 8)
+        x = self.res_blocks(x)
 
         # Policy head
-        policy = F.relu(self.policy_conv(x))  # (N, 2, 8, 8)
-        policy = torch.flatten(policy, 1)  # (N, 128)
-        policy = self.policy_fc(policy)  # (N, 64)
-        # policy = F.log_softmax(policy, dim=1)
+        policy = F.relu(self.policy_conv(x))
+        policy = policy.view(policy.size(0), -1)
+        policy = self.policy_fc(policy)
 
         # Value head
-        value = F.relu(self.value_conv(x))  # (N, 1, 8, 8)
-        value = torch.flatten(value, 1)  # (N, 64)
-        value = F.relu(self.value_fc1(value))  # (N, 32)
-        value = torch.tanh(self.value_fc2(value))  # (N, 1) - bounded [-1, 1]
+        value = F.relu(self.value_conv(x))
+        value = value.view(value.size(0), -1)
+        value = F.relu(self.value_fc1(value))
+        value = torch.tanh(self.value_fc2(value))
 
         return policy, value
 

@@ -5,6 +5,7 @@ from board import Board
 from board_helper import horizontal_mirror_image, rot_90_cw
 import time
 from multiprocessing import Pool
+import globals
 
 def generate_game(parameters):
     identifier, control_model, experimental_model, num_simulations, exploration_constant = parameters
@@ -21,6 +22,7 @@ def generate_game(parameters):
     # prevent early game positions from flooding the dataset
     p = 3125
     while not board.game_ends():
+        start = time.perf_counter()
         if random.randint(0, p) == p:
             game.append(board)
 
@@ -32,7 +34,11 @@ def generate_game(parameters):
 
         current_player = 1 - current_player
         board = Board(player_board, opponent_board, current_player)
-        # print("Game Gen " + str(identifier) + " has successfully finished making a move")
+        print("Game Gen " + str(identifier) + " has successfully finished making a move")
+        end = time.perf_counter()
+        globals.state['time_eval_2'] += end - start
+        print("NN Inference Time Only:", globals.state['time_eval'])
+        print("Full Game Generation Time:", globals.state['time_eval_2'])
 
     # end board not included
     # game.append(board)

@@ -48,9 +48,16 @@ class Board:
         # print(len(tensor))
         # print(len(tensor[0]))
         # print(len(tensor[0][0]))
-        policy, self.value_head = model(tensor)
+        start = time.perf_counter()
+        model.eval()
+        with torch.no_grad():
+            policy, self.value_head = model(tensor)
+        
+        end = time.perf_counter()
+        globals.state['time_eval'] += end - start
         policy = torch.nn.functional.softmax(policy, dim=1)
-        policy = policy[0].detach().numpy()
+        policy = policy[0].detach().cpu().numpy()
+
         # if random.randint(0, 1000) < 1:
         #     print(policy)
 
@@ -184,8 +191,7 @@ class Board:
         for policy_value, move, child in self.next_boards:
             self.full_policy[move] += self.mcts_policy[index]
             self.legal_moves[move] = 1
-            sum_values += self.full_policy[move]
-            index += 1
+            sum_values += self.full_policy[move]index += 1
         if sum_values > 0:
             self.full_policy /= sum_values
         else:
