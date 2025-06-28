@@ -4,5 +4,4 @@
 .idea/
 **/datasets/
 *.amltmp
-**/plots/
 **/models/
