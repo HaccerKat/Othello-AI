@@ -102,8 +102,8 @@ def training_loop(generation, model, device):
         buffer = ConcatDataset([buffer, keep_dataset])
 
     BATCH_SIZE = 2048
-    train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True)
-    test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True)
+    train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
+    test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
 
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9)
     best_test_loss = float("inf")
