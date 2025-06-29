@@ -109,7 +109,7 @@ def generate_games(parameters):
             if new_board.game_ends():
                 game_winner = new_board.get_winner()
                 # weight full games more in later generations (make epsilon closer to 1)
-                epsilon = 0.5
+                epsilon = 0.7
                 for player, player_board, opponent_board, policy, value_mcts in games[identifier]:
                     if policy[0] == -1:
                         # indicates a skip turn and not to add in dataset
@@ -118,7 +118,7 @@ def generate_games(parameters):
                     # return_game.append((position.player_board, position.opponent_board, policy, value_mcts))
                     # return_game.append((position.player_board, position.opponent_board, policy, winner))
                     # print((value_mcts + winner) / 2)
-                    dataset.append((player_board, opponent_board, policy, (value_mcts + winner) / 2))
+                    dataset.append((player_board, opponent_board, policy, (1 - epsilon) * value_mcts + epsilon * winner))
             else:
                 tmp_boards_and_identifier.append((identifier, new_board))
 

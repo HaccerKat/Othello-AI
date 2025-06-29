@@ -3,7 +3,6 @@ import board_helper as bh
 import time
 import globals
 import math
-from torch.cuda.amp import autocast
 
 # Even resnets cannot saturate a mid-tier GPU without inference batching
 def batch_inference(boards, model, num_games):
@@ -18,8 +17,7 @@ def batch_inference(boards, model, num_games):
     model.eval()
     tensor = tensor.to(device)
     with torch.no_grad():
-        with autocast():
-            policies, values = model(tensor)
+        policies, values = model(tensor)
 
     policies = torch.nn.functional.softmax(policies, dim=1)
     policies = policies.detach().cpu().numpy()

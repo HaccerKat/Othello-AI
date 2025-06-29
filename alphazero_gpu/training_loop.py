@@ -101,7 +101,7 @@ def training_loop(generation, model, device):
         training_data = ConcatDataset([training_data, buffer_dataset])
         buffer = ConcatDataset([buffer, keep_dataset])
 
-    BATCH_SIZE = 2048
+    BATCH_SIZE = 128
     train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
     test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
 
@@ -269,11 +269,11 @@ def main():
             learning_rate = 0.001
             num_simulations = 300
         if generation >= 25:
-            learning_rate = 0.0005
-            num_simulations = 500
+            learning_rate = 0.0007
+            num_simulations = 400
         if generation >= 50:
-            learning_rate = 0.0002
-            num_simulations = 800
+            learning_rate = 0.0004
+            num_simulations = 600
         bestNN, policy_loss, value_loss, test_loss, patience_exceeded, avg_entropy = training_loop(generation, model, device)
         model = bestNN
         patience_exceeded_counter += patience_exceeded
