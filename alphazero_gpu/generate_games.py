@@ -4,10 +4,13 @@ from mcts import mcts_mp
 from board import Board
 from board_helper import horizontal_mirror_image, rot_90_cw
 import time
-from multiprocessing import Pool
+import os
 import globals
 import numpy as np
-import gc
+import math
+from multiprocessing_helper import execute_gpu
+import torch
+import torch.multiprocessing as mp
 import matplotlib.pyplot as plt
 
 # def generate_game(parameters):
@@ -67,7 +70,7 @@ import matplotlib.pyplot as plt
 #     return sum(1 for o in gc.get_objects() if isinstance(o, Board))
 
 def generate_games(parameters):
-    identifier, control_model, experimental_model, num_simulations, num_games, exploration_constant = parameters
+    identifier, control_model, experimental_model, num_simulations, num_games, exploration_constant, epsilon = parameters
     print("Game Gen " + str(identifier) + " is starting")
     # half-half on whether control or experimental goes first
     control_player = identifier % 2
@@ -109,7 +112,6 @@ def generate_games(parameters):
             if new_board.game_ends():
                 game_winner = new_board.get_winner()
                 # weight full games more in later generations (make epsilon closer to 1)
-                epsilon = 0.7
                 for player, player_board, opponent_board, policy, value_mcts in games[identifier]:
                     if policy[0] == -1:
                         # indicates a skip turn and not to add in dataset
@@ -143,42 +145,57 @@ def generate_games(parameters):
                 cnt[i] += 1
     return dataset, position_importance, cnt
 
-# LEGACY
-# if __name__ == '__main__':
-#     nn_name_control = input("Enter the control's model name: ")
-#     nn_name_experimental = input("Enter the experimental's model name: ")
-#     control_model = load_model(NeuralNetwork, 'models/model_weights_' + nn_name_control + '.pth')
-#     experimental_model = load_model(NeuralNetwork, 'models/model_weights_' + nn_name_experimental + '.pth')
-#     control_model.eval()
-#     experimental_model.eval()
-#
-#     num_games = int(input("Enter the number of games: "))
-#     start = time.perf_counter()
-#     current_game = 0
-#
-#     # open('datasets/features.bin', 'wb')
-#     # open('datasets/policies.txt', 'w')
-#     # open('datasets/values.txt', 'w')
-#     for game in Pool().imap(generate_game, range(num_games)):
-#         for player_board, opponent_board, policy, value in game:
-#             with open('datasets/features.bin', 'ab') as f:
-#                 # since the size of the group of symmetrical boards is 8
-#                 # labels dealt with in the training loop to save disk space
-#                 for i in range(2):
-#                     for j in range(4):
-#                         position_string = format(player_board, '064b') + format(opponent_board, '064b')
-#                         byte_string = int(position_string, 2).to_bytes(16, byteorder='big')
-#                         f.write(byte_string)
-#                         player_board = rot_90_cw(player_board)
-#                         opponent_board = rot_90_cw(opponent_board)
-#                     player_board = horizontal_mirror_image(player_board)
-#                     opponent_board = horizontal_mirror_image(opponent_board)
-#
-#             with open('datasets/policies.txt', 'a') as f:
-#                 f.write(' '.join(map(str, policy)) + '\n')
-#             with open('datasets/values.txt', 'a') as f:
-#                 f.write(str(value) + '\n')
-#         current_game += 1
-#         if current_game % 10 == 0:
-#             print("At Game #" + str(current_game))
+def main():
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
+    os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
+    torch.set_num_threads(1)
+
+    model_numbers = [75, 93, 160, 163]
+    open('datasets/features.bin', 'wb')
+    open('datasets/values.txt', 'w')
+    while True:
+        m1 = model_numbers[random.randint(0, len(model_numbers) - 1)]
+        m2 = model_numbers[random.randint(0, len(model_numbers) - 1)]
+        print("Control Model Number: " + str(m1))
+        print("Experimental Model Number: " + str(m2))
+        control_model = load_model(NeuralNetwork, 'models/model_weights_' + str(m1) + '.pth')
+        experimental_model = load_model(NeuralNetwork, 'models/model_weights_' + str(m2) + '.pth')
+        control_model.eval()
+        experimental_model.eval()
+        control_model.share_memory()
+        experimental_model.share_memory()
+        num_games_to_generate = 512
+        start = time.perf_counter()
+        inference_batch_size = 64
+        num_simulations = 600
+        exploration_constant = math.sqrt(2)
+        jobs = [(i, control_model, experimental_model, num_simulations, inference_batch_size, exploration_constant, 1) for
+                i in range(num_games_to_generate // inference_batch_size)]
+
+        print("Generating Games...")
+        games = execute_gpu(generate_games, jobs)
+        for dataset, position_importance, cnt in games:
+            for player_board, opponent_board, policy, value in dataset:
+                with open('datasets/features.bin', 'ab') as f, open('datasets/values.txt', 'a') as g:
+                    for _ in range(2): # swap player and opponent's pieces
+                        for i in range(2): # flip horizontally
+                            for j in range(4): # rotate 90 degrees
+                                position_string = format(player_board, '064b') + format(opponent_board, '064b')
+                                byte_string = int(position_string, 2).to_bytes(16, byteorder='big')
+                                f.write(byte_string)
+                                g.write(str(value) + ' ')
+                                player_board = rot_90_cw(player_board)
+                                opponent_board = rot_90_cw(opponent_board)
+                            player_board = horizontal_mirror_image(player_board)
+                            opponent_board = horizontal_mirror_image(opponent_board)
+                        value *= -1
+                        player_board, opponent_board = opponent_board, player_board
+
+        end = time.perf_counter()
+        print("Execution time (s):", end - start)
+
+if __name__ == '__main__':
+    mp.set_start_method("spawn", force=True)
+    main()

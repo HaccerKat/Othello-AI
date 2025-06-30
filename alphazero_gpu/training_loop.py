@@ -40,7 +40,7 @@ def training_loop(generation, model, device):
 
     model.eval()
     model.share_memory()
-    jobs = [(i, model, model, num_simulations, inference_batch_size, exploration_constant) for i in range(num_games_to_simulate // inference_batch_size)]
+    jobs = [(i, model, model, num_simulations, inference_batch_size, exploration_constant, 0.5) for i in range(num_games_to_simulate // inference_batch_size)]
 
     print("Generating Games...")
     if device == "cpu":
@@ -102,14 +102,14 @@ def training_loop(generation, model, device):
         buffer = ConcatDataset([buffer, keep_dataset])
 
     BATCH_SIZE = 128
-    train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
-    test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=4)
+    train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, shuffle=True)
+    test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True)
 
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9)
     best_test_loss = float("inf")
-    patience = 1
+    patience = 2
     patience_counter = 0
-    epochs = 3
+    epochs = 10
     best_nn = None
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
@@ -182,7 +182,6 @@ def update_elo(generation, device):
     print("95% Confidence Interval: [" + str(lower_bound) + "%, " + str(upper_bound) + "%]")
 
     avg_full_policy = sum_full_policy / (sum_legal_moves + 0.0001)
-    avg_full_policy = (avg_full_policy ** 2) * 10
     plt.imshow(avg_full_policy.reshape(8, 8), cmap='Reds')
     plt.colorbar()
     plt.title("Location of Crucial Moves")
@@ -272,7 +271,7 @@ def main():
             learning_rate = 0.0007
             num_simulations = 400
         if generation >= 50:
-            learning_rate = 0.0004
+            learning_rate = 0.0002
             num_simulations = 600
         bestNN, policy_loss, value_loss, test_loss, patience_exceeded, avg_entropy = training_loop(generation, model, device)
         model = bestNN

@@ -13,7 +13,6 @@ def batch_inference(boards, model, num_games):
         [board.opponent_board for board in boards]
     )
 
-    # print(tensor)
     model.eval()
     tensor = tensor.to(device)
     with torch.no_grad():
@@ -22,8 +21,6 @@ def batch_inference(boards, model, num_games):
     policies = torch.nn.functional.softmax(policies, dim=1)
     policies = policies.detach().cpu().numpy()
     values = values.detach().cpu().numpy()
-    # print(policies)
-    # print(values)
     for i in range(num_games):
         boards[i].policy_head = policies[i]
         boards[i].value_head = values[i].item()
@@ -32,7 +29,7 @@ def batch_inference(boards, model, num_games):
 
 def mcts(root, model, debug=False, gameplay = False, num_simulations=100, exploration_constant=math.sqrt(2)):
     batch_inference([root], model, 1)
-    root.find_next_boards()
+    root.find_next_boards(gameplay)
     for i in range(num_simulations):
         node = root
         while not node.game_ends():
@@ -45,7 +42,7 @@ def mcts(root, model, debug=False, gameplay = False, num_simulations=100, explor
                 node = node.select(exploration_constant)
 
         batch_inference([node], model, 1)
-        node.backpropagate()
+        node.backpropagate(gameplay)
 
     result = root.get_next_board(gameplay)
     if debug:
@@ -56,7 +53,7 @@ def mcts(root, model, debug=False, gameplay = False, num_simulations=100, explor
 def mcts_mp(roots, model, num_games, debug=False, gameplay = False, num_simulations=100, exploration_constant=math.sqrt(2)):
     batch_inference(roots, model, num_games)
     for root in roots:
-        root.find_next_boards()
+        root.find_next_boards(gameplay)
     for _ in range(num_simulations):
         # shallow copy of the roots array
         nodes = roots[:]
@@ -73,7 +70,7 @@ def mcts_mp(roots, model, num_games, debug=False, gameplay = False, num_simulati
         batch_inference(nodes, model, num_games)
         start = time.perf_counter()
         for i in range(num_games):
-            nodes[i].backpropagate()
+            nodes[i].backpropagate(gameplay)
 
         end = time.perf_counter()
         globals.state['time_eval_3'] += end - start

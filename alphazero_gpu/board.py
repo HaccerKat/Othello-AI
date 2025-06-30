@@ -42,13 +42,13 @@ class Board:
             sum += policy_value
         print(f"NN Policy: {test}")
         print(f"Sum NN Policy (Closer to 1 is better):", sum)
-        # print(f"Full NN Policy: {self.policy_head}")
+        print(f"Full NN Policy: {self.policy_head}")
         print(f"MCTS Value Head: {test2}")
         self.get_full_policy()
         print(f"Full Policy: {self.full_policy}")
         print("---------------------------------------------")
 
-    def find_next_boards(self):
+    def find_next_boards(self, gameplay):
         # Commented out since the current assumption is that the inference is done in mcts.py
         # tensor = bh.to_tensor(self.player_board, self.opponent_board)
         # tensor = torch.reshape(tensor, (1, 2, 8, 8))
@@ -97,13 +97,13 @@ class Board:
         if not self.next_boards:
             self.next_boards.append((1, -1, Board(self.opponent_board, self.player_board, 1 - self.player, self)))
 
-        if self.parent == None:
+        if self.parent == None and gameplay:
             alpha = min(1.0, 10.0 / len(self.next_boards))
             epsilon = 0.25
             dirichlet = epsilon * np.random.dirichlet(np.ones(len(self.next_boards)) * alpha)
             for i, dir in enumerate(dirichlet):
                 policy_value, move, child = self.next_boards[i]
-                self.next_boards[i] = ((1 - epsilon) * policy_value + epsilon * dir, move, child)
+                self.next_boards[i] = ((1 - epsilon) * policy_value + dir, move, child)
 
         sorted(self.next_boards, reverse=True)
 
@@ -147,9 +147,9 @@ class Board:
                 new_board = child
         return new_board
 
-    def backpropagate(self):
+    def backpropagate(self, gameplay):
         if not self.next_boards:
-            self.find_next_boards()
+            self.find_next_boards(gameplay)
 
         if self.game_ends():
             reward = self.get_winner()

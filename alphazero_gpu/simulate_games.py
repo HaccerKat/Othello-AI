@@ -11,7 +11,7 @@ from mcts import mcts_mp
 from board import Board
 import board_helper as bh
 from nn_init import NeuralNetwork, load_model
-from multiprocessing_helper import execute_mp
+from multiprocessing_helper import execute_gpu
 
 def simulate_game(parameters):
     identifier, control_model, experimental_model, num_simulations, num_games, exploration_constant = parameters
@@ -62,71 +62,62 @@ def simulate_game(parameters):
 # 0 - Black
 # 1 - White
 def main():
-    pass
-    # os.environ["OMP_NUM_THREADS"] = "1"
-    # os.environ["MKL_NUM_THREADS"] = "1"
-    # os.environ["NUMEXPR_NUM_THREADS"] = "1"
-    #
-    # torch.set_num_threads(1)
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
+    os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
+    torch.set_num_threads(1)
 
-    # Fix later
-    # nn_name_control = input("Enter the control's model name: ")
-    # nn_name_experimental = input("Enter the experimental's model name: ")
-    # control_model = load_model(NeuralNetwork, 'models/model_weights_' + nn_name_control + '.pth')
-    # experimental_model = load_model(NeuralNetwork, 'models/model_weights_' + nn_name_experimental + '.pth')
-    # control_model.eval()
-    # experimental_model.eval()
-    #
-    # draws, control_wins, experimental_wins = 0, 0, 0
-    #
-    # num_games = int(input("Enter the number of games: "))
-    # start = time.perf_counter()
-    # current_game = 0
-    #
-    # sum_full_policy = np.zeros(64)
-    # sum_legal_moves = np.zeros(64)
-    # control_model.eval()
-    # control_model.share_memory()
-    # experimental_model.eval()
-    # experimental_model.share_memory()
-    # jobs = [(i, control_model, experimental_model, 100, math.sqrt(2)) for i in range(num_games)]
-    #
-    # print("Generating Games...")
-    # games = execute_mp(simulate_game, jobs)
-    # for result_draws, result_control_wins, result_experimental_wins, full_policy, legal_moves in games:
-    #     draws += result_draws
-    #     control_wins += result_control_wins
-    #     experimental_wins += result_experimental_wins
-    #     current_game += 1
-    #     sum_full_policy += full_policy
-    #     sum_legal_moves += legal_moves
-    #     if current_game % 10 == 0:
-    #         print("At Game #" + str(current_game))
-    #
-    # print(sum_full_policy)
-    # print(sum_legal_moves)
-    # num_games -= draws
-    # experimental_WR = experimental_wins / num_games
-    # probability = 1.0 * experimental_wins / num_games
-    # error = 1.96 * math.sqrt(probability * (1 - probability) / num_games)
-    # lower_bound = 100.0 * (probability - error)
-    # upper_bound = 100.0 * (probability + error)
-    # print("Number of Draws:", draws)
-    # print("Number of Control Wins:", control_wins)
-    # print("Number of Experimental Wins:", experimental_wins)
-    # print("Experimental WR: " + str(experimental_WR * 100.0) + "%")
-    # print("95% Confidence Interval: [" + str(lower_bound) + "%, " + str(upper_bound) + "%]")
-    #
-    # avg_full_policy = sum_full_policy / (sum_legal_moves + 1)
-    # avg_full_policy = (avg_full_policy ** 2) * 10
-    # print("Control Avg Full Policy:")
-    # plt.imshow(avg_full_policy.reshape(8, 8), cmap='Reds')
-    # plt.colorbar()
-    # plt.show()
-    #
-    # end = time.perf_counter()
-    # print("Execution time (s):", end - start)
+    nn_name_control = input("Enter the control's model name: ")
+    nn_name_experimental = input("Enter the experimental's model name: ")
+    control_model = load_model(NeuralNetwork, 'models/model_weights_' + nn_name_control + '.pth')
+    experimental_model = load_model(NeuralNetwork, 'models/model_weights_' + nn_name_experimental + '.pth')
+    control_model.eval()
+    experimental_model.eval()
+
+    start = time.perf_counter()
+    current_game = 0
+
+    sum_full_policy = np.zeros(64)
+    sum_legal_moves = np.zeros(64)
+    num_games_to_simulate = int(input("Enter the number of games: "))
+    inference_batch_size = 32
+    num_simulations = 200
+    exploration_constant = math.sqrt(2)
+    draws, control_wins, experimental_wins = 0, 0, 0
+    jobs = [(i, control_model, experimental_model, num_simulations, inference_batch_size, exploration_constant) for i in range(num_games_to_simulate // inference_batch_size)]
+
+    print("Simulating Games...")
+    games = execute_gpu(simulate_game, jobs)
+
+    for result_draws, result_control_wins, result_experimental_wins, full_policy, legal_moves in games:
+        draws += result_draws
+        control_wins += result_control_wins
+        experimental_wins += result_experimental_wins
+        current_game += 1
+        sum_full_policy += full_policy
+        sum_legal_moves += legal_moves
+
+    num_games_to_simulate -= draws
+    experimental_WR = experimental_wins / num_games_to_simulate
+    probability = 1.0 * experimental_wins / num_games_to_simulate
+    error = 1.96 * math.sqrt(probability * (1 - probability) / num_games_to_simulate)
+    lower_bound = 100.0 * (probability - error)
+    upper_bound = 100.0 * (probability + error)
+    print("Number of Draws:", draws)
+    print("Number of Control Wins:", control_wins)
+    print("Number of Experimental Wins:", experimental_wins)
+    print("Experimental WR: " + str(experimental_WR * 100.0) + "%")
+    print("95% Confidence Interval: [" + str(lower_bound) + "%, " + str(upper_bound) + "%]")
+
+    avg_full_policy = sum_full_policy / (sum_legal_moves + 1)
+    print("Control Avg Full Policy:")
+    plt.imshow(avg_full_policy.reshape(8, 8), cmap='Reds')
+    plt.colorbar()
+    plt.show()
+
+    end = time.perf_counter()
+    print("Execution time (s):", end - start)
 
 if __name__ == "__main__":
     mp.set_start_method("spawn", force=True)
