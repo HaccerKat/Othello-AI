@@ -153,8 +153,8 @@ def main():
     torch.set_num_threads(1)
 
     model_numbers = [75, 93, 160, 163]
-    open('datasets/features.bin', 'wb')
-    open('datasets/values.txt', 'w')
+    # open('datasets/features.bin', 'wb')
+    # open('datasets/values.txt', 'w')
     while True:
         m1 = model_numbers[random.randint(0, len(model_numbers) - 1)]
         m2 = model_numbers[random.randint(0, len(model_numbers) - 1)]
@@ -171,7 +171,7 @@ def main():
         inference_batch_size = 64
         num_simulations = 600
         exploration_constant = math.sqrt(2)
-        jobs = [(i, control_model, experimental_model, num_simulations, inference_batch_size, exploration_constant, 1) for
+        jobs = [(i, control_model, experimental_model, num_simulations, inference_batch_size, exploration_constant, 0.05) for
                 i in range(num_games_to_generate // inference_batch_size)]
 
         print("Generating Games...")

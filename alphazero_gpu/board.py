@@ -29,8 +29,7 @@ class Board:
         bh.print_both_boards(self.player_board, self.opponent_board)
         print(f"Player: {self.player}")
         print(f"Value Head: {self.value_head}")
-        print(f"Visited Count: {self.visited_count}")
-        print(f"Sum Eval: {self.sum_eval}")
+        print(f"MCTS Value: {self.sum_eval / (self.visited_count + 0.0001)}")
         print(f"Current Child: {self.current_child}")
         print(f"MCTS Policy: {self.mcts_policy}")
         test = []
@@ -42,7 +41,7 @@ class Board:
             sum += policy_value
         print(f"NN Policy: {test}")
         print(f"Sum NN Policy (Closer to 1 is better):", sum)
-        print(f"Full NN Policy: {self.policy_head}")
+        # print(f"Full NN Policy: {self.policy_head}")
         print(f"MCTS Value Head: {test2}")
         self.get_full_policy()
         print(f"Full Policy: {self.full_policy}")
