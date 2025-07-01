@@ -8,11 +8,11 @@ class Experimental_Board {
     char grid[8][8];
     bool player, found_next_moves = 0, skip_turn = 0;
     int game_ends = -1;
-    float eval = -1.0;
+    float eval = -2.0;
     int next_move = -1;
     int nnue_layer[LAYERS[0]];
 public:
-    const float BLACK_WINS = 1, WHITE_WINS = 0, DRAW = 0.5;
+    const float BLACK_WINS = 1, WHITE_WINS = -1, DRAW = 0.0;
     std::vector<std::pair<Experimental_Board*, std::pair<int, int>>> next_boards;
     ~Experimental_Board();
     Experimental_Board(char gr[8][8], bool p);

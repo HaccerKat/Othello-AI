@@ -1,5 +1,6 @@
 // For simulating lots of games at a time
 
+#include <cassert>
 #include <cstring>
 #include <iostream>
 #include <fstream>
@@ -27,13 +28,13 @@ int simulate_game() {
     grid[3][4] = grid[4][3] = '0';
     Board* board = new Board(grid, 0);
     int init_nnue_layer[LAYERS[0]];
-    int16_t init_layer_2[LAYERS[1]];
+    // int16_t init_layer_2[LAYERS[1]];
     memset(init_nnue_layer, 0, sizeof(init_nnue_layer));
-    for (int i = 0; i < LAYERS[1]; i++) {
-        init_layer_2[i] = QUANT_BIASES[i];
-    }
+    // for (int i = 0; i < LAYERS[1]; i++) {
+    //     init_layer_2[i] = QUANT_BIASES[i];
+    // }
 
-    Experimental_Board* experimental_board = new Experimental_Board(grid, 0, init_nnue_layer, init_layer_2);
+    Experimental_Board* experimental_board = new Experimental_Board(grid, 0);
 
     // Board* orig_board = board;
     // Experimental_Board* orig_experimental_board = experimental_board;
@@ -51,18 +52,18 @@ int simulate_game() {
             std::tie(x, y) = get_best_move<Experimental_Board*, float>(experimental_board, 0.1, 1);
         }
 
-        std::vector<int> prev_nnue_layer_vec = experimental_board->get_nnue_layer();
+        // std::vector<int> prev_nnue_layer_vec = experimental_board->get_nnue_layer();
         Board* new_board = board->advance_move(x, y);
-        std::vector<int16_t> layer_2_vec = experimental_board->get_layer_2();
-        int prev_nnue_layer[LAYERS[0]];
-        for (int i = 0; i < LAYERS[0]; i++) {
-            prev_nnue_layer[i] = prev_nnue_layer_vec[i];
-        }
-
-        int16_t layer_2[LAYERS[1]];
-        for (int i = 0; i < LAYERS[1]; i++) {
-            layer_2[i] = layer_2_vec[i];
-        }
+        // std::vector<int16_t> layer_2_vec = experimental_board->get_layer_2();
+        // int prev_nnue_layer[LAYERS[0]];
+        // for (int i = 0; i < LAYERS[0]; i++) {
+        //     prev_nnue_layer[i] = prev_nnue_layer_vec[i];
+        // }
+        //
+        // int16_t layer_2[LAYERS[1]];
+        // for (int i = 0; i < LAYERS[1]; i++) {
+        //     layer_2[i] = layer_2_vec[i];
+        // }
 
         for (int i = 0; i < 8; i++) {
             for (int j = 0; j < 8; j++) {
@@ -74,7 +75,7 @@ int simulate_game() {
         delete board;
         delete experimental_board;
         board = new Board(grid, player);
-        experimental_board = new Experimental_Board(grid, player, prev_nnue_layer, layer_2);
+        experimental_board = new Experimental_Board(grid, player);
         current_player ^= 1;
     }
 
@@ -82,7 +83,7 @@ int simulate_game() {
     // delete orig_board;
     // delete orig_experimental_board;
     if (winner == 1) return 2;
-    else return ((winner / 2) ^ starting_player);
+    return ((winner / 2) ^ starting_player);
 }
 
 int32_t main() {
@@ -91,12 +92,11 @@ int32_t main() {
     // 0 - black piece
     // 1 - white piece
     auto start = std::chrono::high_resolution_clock::now();
+    std::cout << "Enter NNUE Name: ";
     std::string nnue_name;
     std::cin >> nnue_name;
-    // Change later
-    // Used locally since cmake's working directory is in cmake-build-release
-    std::ifstream weights_file("/home/haccerkat/Documents/Programming/Projects/Othello-AI/nnue/models/weights_" + nnue_name + ".txt");
-    std::ifstream biases_file("/home/haccerkat/Documents/Programming/Projects/Othello-AI/nnue/models/biases_" + nnue_name + ".txt");
+    std::ifstream weights_file("./models/weights_" + nnue_name + ".txt");
+    std::ifstream biases_file("./models/biases_" + nnue_name + ".txt");
 
     double temp;
     int temp_idx = 0;
@@ -119,9 +119,42 @@ int32_t main() {
         QUANT_WEIGHTS_LAYER_0[LAYERS[1] * x + y] = QUANT_WEIGHTS[i];
     }
 
+    // std::ifstream weights_file_2("./models/weights_" + nnue_name + "_quantized.txt");
+    // std::ifstream biases_file_2("./models/biases_" + nnue_name + "_quantized.txt");
+    // for (int i = 0; i < WEIGHTS_SZ; i++) {
+    //     char c;
+    //     weights_file_2 >> c;
+    //     int x = c - '!' - 46;
+    //     if (c == '~') {
+    //         weights_file_2 >> c;
+    //         x = (c - '!' - 46) * 93;
+    //         weights_file_2 >> c;
+    //         x += (c - '!');
+    //     }
+    //
+    //     QUANT_WEIGHTS[i] = x;
+    // }
+    //
+    // for (int i = 0; i < BIASES_SZ; i++) {
+    //     char c;
+    //     int x = c - '!' - 46;
+    //     biases_file_2 >> c;
+    //     if (c == '~') {
+    //         biases_file_2 >> c;
+    //         x = (c - '!' - 46) * 93;
+    //         biases_file_2 >> c;
+    //         x += (c - '!');
+    //     }
+    //
+    //     QUANT_BIASES[i] = x;
+    // }
+    //
+    // weights_file_2.close();
+    // biases_file_2.close();
+
     // with multithreading
     constexpr int num_threads = 16;
-    const int num_games = 500;
+    const int num_games = 1000;
     int positions_generated = 0;
     // auto start = std::chrono::steady_clock::now();
     int board_wins = 0, experimental_wins = 0;

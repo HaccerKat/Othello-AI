@@ -1,5 +1,4 @@
-// #pragma GCC optimize("O3")
-// #pragma GCC target("avx2")
+
 #include "experimental_board.h"
 #include <cstring>
 #include <iostream>
@@ -20,13 +19,13 @@ Experimental_Board::Experimental_Board(char gr[8][8], bool p) {
     player = p;
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
-            int pos = 2 * (i * 8 + j);
-            if (grid[i][j] == '0') nnue_layer[pos] = 1;
-            if (grid[i][j] == '1') nnue_layer[pos + 1] = 1;
+            int pos = i * 8 + j;
+            if (grid[i][j] != '.') {
+                if (grid[i][j] - '0' == player) nnue_layer[pos] = 1;
+                else nnue_layer[pos + 64] = 1;
+            }
         }
     }
-
-    nnue_layer[128] = player;
 }
 
 void Experimental_Board::print() const {
@@ -36,29 +35,6 @@ void Experimental_Board::print() const {
         }
 
         std::cout << "\n";
-    }
-}
-
-void Experimental_Board::horizontal_mirror_image() {
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 4; j++) {
-            std::swap(grid[i][j], grid[i][7 - j]);
-        }
-    }
-}
-
-void Experimental_Board::rot_90_cw() {
-    char temp[8][8];
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            temp[j][7 - i] = grid[i][j];
-        }
-    }
-
-    for (int i = 0; i < 8; i++) {
-        for (int j = 0; j < 8; j++) {
-            grid[i][j] = temp[i][j];
-        }
     }
 }
 
@@ -108,7 +84,6 @@ std::string Experimental_Board::get_winner() const {
 }
 
 void Experimental_Board::get_static_eval() {
-
     if (find_if_game_ends()) {
         auto [black_points, white_points] = get_points();
         if (black_points == white_points) {
@@ -121,54 +96,54 @@ void Experimental_Board::get_static_eval() {
 
     // constant optimize later
     auto start = std::chrono::high_resolution_clock::now();
-    int16_t res_int[RES_SZ];
-    for (int i = 0; i < 129; i++) {
-        res_int[i] = round(nnue_layer[i] * QUANT_MULT);
-    }
+    // int16_t res_int[RES_SZ];
+    // for (int i = 0; i < LAYERS[0]; i++) {
+    //     res_int[i] = round(nnue_layer[i] * QUANT_MULT);
+    // }
+    //
+    // int idx_weights = 0, idx_biases = 0, idx_res = LAYERS[0];
+    // for (int i = 1; i < CNT_LAYERS; i++) {
+    //     // index of the start of the previous layer
+    //     int start_idx = idx_res - LAYERS[i - 1];
+    //     for (int j = 0; j < LAYERS[i]; j++) {
+    //         int acc = 0;
+    //         for (int k = 0; k < LAYERS[i - 1]; k++) {
+    //             acc += QUANT_WEIGHTS[idx_weights + k] * res_int[start_idx + k];
+    //         }
+    //
+    //         // __m128i sum = _mm_setzero_si128();
+    //         // for (int k = 0; k + 7 < LAYERS[i - 1]; k += 8) {
+    //         //     __m128i va = _mm_loadu_si128((__m128i const*)(QUANT_WEIGHTS + idx_weights + k));
+    //         //     __m128i vb = _mm_loadu_si128((__m128i const*)(res_int + start_idx + k));
+    //         //     __m128i products = _mm_madd_epi16(va, vb);
+    //         //     sum = _mm_add_epi32(sum, products);
+    //         // }
+    //         //
+    //         // alignas(16) int32_t tmp[4];
+    //         // _mm_store_si128((__m128i*)tmp, sum);
+    //         // acc = int(tmp[0]) + tmp[1] + tmp[2] + tmp[3];
+    //         //
+    //         // for (int k = (LAYERS[i - 1] / 8) * 8; k < LAYERS[i - 1]; k++) {
+    //         //     acc += QUANT_WEIGHTS[idx_weights + k] * res_int[start_idx + k];
+    //         // }
+    //
+    //         // std::cerr << acc << std::endl;
+    //         res_int[idx_res] = round(acc / QUANT_MULT) + QUANT_BIASES[idx_biases];
+    //         if (i + 1 == CNT_LAYERS) {
+    //             float val = res_int[idx_res] / QUANT_MULT;
+    //             eval = tanh(val) * (player == 1 ? -1 : 1);
+    //         }
+    //
+    //         // ReLU
+    //         else {
+    //             res_int[idx_res] = std::max((int16_t)0, res_int[idx_res]);
+    //         }
+    //
+    //         idx_weights += LAYERS[i - 1], idx_biases++, idx_res++;
+    //     }
+    // }
 
-    int idx_weights = 0, idx_biases = 0, idx_res = LAYERS[0];
-    for (int i = 1; i < CNT_LAYERS; i++) {
-        // index of the start of the previous layer
-        int start_idx = idx_res - LAYERS[i - 1];
-        for (int j = 0; j < LAYERS[i]; j++) {
-            int acc = 0;
-            for (int k = 0; k < LAYERS[i - 1]; k++) {
-                acc += QUANT_WEIGHTS[idx_weights + k] * res_int[start_idx + k];
-            }
-
-            // __m128i sum = _mm_setzero_si128();
-            // for (int k = 0; k + 7 < LAYERS[i - 1]; k += 8) {
-            //     __m128i va = _mm_loadu_si128((__m128i const*)(QUANT_WEIGHTS + idx_weights + k));
-            //     __m128i vb = _mm_loadu_si128((__m128i const*)(res_int + start_idx + k));
-            //     __m128i products = _mm_madd_epi16(va, vb);
-            //     sum = _mm_add_epi32(sum, products);
-            // }
-            //
-            // alignas(16) int32_t tmp[4];
-            // _mm_store_si128((__m128i*)tmp, sum);
-            // acc = int(tmp[0]) + tmp[1] + tmp[2] + tmp[3];
-            //
-            // for (int k = (LAYERS[i - 1] / 8) * 8; k < LAYERS[i - 1]; k++) {
-            //     acc += QUANT_WEIGHTS[idx_weights + k] * res_int[start_idx + k];
-            // }
-
-            // std::cerr << acc << std::endl;
-            // Sigmoid
-            res_int[idx_res] = round(acc / QUANT_MULT) + QUANT_BIASES[idx_biases];
-            if (i + 1 == CNT_LAYERS) {
-                float logit = res_int[idx_res] / QUANT_MULT;
-                eval = 1 / (1 + exp(-logit));
-            }
-
-            // ReLU
-            else {
-                res_int[idx_res] = std::max((int16_t)0, res_int[idx_res]);
-            }
-
-            idx_weights += LAYERS[i - 1], idx_biases++, idx_res++;
-        }
-    }
-
+    eval = 0;
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
     sum_times += elapsed.count();
@@ -176,7 +151,7 @@ void Experimental_Board::get_static_eval() {
 
 float Experimental_Board::get_eval() {
     // static eval has not been calculated yet
-    if (eval == -1.0) {
+    if (eval == -2.0) {
         get_static_eval();
     }
 
@@ -189,9 +164,6 @@ void Experimental_Board::change_eval(float new_eval) {
 
 void Experimental_Board::find_next_boards() {
     auto start = std::chrono::high_resolution_clock::now();
-    // auto end = std::chrono::high_resolution_clock::now();
-    // std::chrono::duration<double> elapsed = end - start;
-    // sum_times_2 += elapsed.count();
     if (found_next_moves) {
         return;
     }

@@ -10,34 +10,35 @@
 #define dbgm(...)
 #define ulim_stack()
 #endif
-long double sigmoid(long double x) {
-    return 1 / (1 + exp(-x));
-}
-
 int32_t main() {
+    string nnue_name;
+    std:cout << "NNUE Name: ";
+    std::cin >> nnue_name;
+    std::ifstream weights_file("./models/weights_" + nnue_name + ".txt");
+    std::ifstream biases_file("./models/biases_" + nnue_name + ".txt");
+
     char grid[8][8];
     std::array<int, 129> initial{}, nnue_layer{};
+    bool player;
+    std::cout << "Player: ";
+    std::cin >> player;
+    std::cout << "Board:\n";
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < 8; j++) {
-            int pos = 2 * (i * 8 + j);
-            cin >> grid[i][j];
-            if (grid[i][j] == '0') nnue_layer[pos] = 1;
-            if (grid[i][j] == '1') nnue_layer[pos + 1] = 1;
+            int pos = i * 8 + j;
+            char x;
+            cin >> x;
+            if (x != '.') {
+                if (x - '0' == player) nnue_layer[pos] = 1;
+                else nnue_layer[pos + 64] = 1;
+            }
         }
     }
 
-    bool player;
-    std::cin >> player;
-    nnue_layer[128] = player;
-    string nnue_name;
-    std::cin >> nnue_name;
-    std::ifstream weights_file("/home/haccerkat/Documents/Programming/Projects/Othello-AI/nnue/models/weights_" + nnue_name + ".txt");
-    std::ifstream biases_file("/home/haccerkat/Documents/Programming/Projects/Othello-AI/nnue/models/biases_" + nnue_name + ".txt");
-
-    const int cnt_layers = 4;
-    int layers[cnt_layers] = {129, 256, 32, 1};
+    const int cnt_layers = 5;
+    int layers[cnt_layers] = {128, 256, 32, 32, 1};
     int weights_sz = 0, biases_sz = 0;
-    for (int i = 1; i < 4; i++) {
+    for (int i = 1; i < cnt_layers; i++) {
         weights_sz += layers[i - 1] * layers[i];
         biases_sz += layers[i];
     }
@@ -57,7 +58,7 @@ int32_t main() {
     }
 
     fill(res, res + res_sz, 0.0);
-    for (int i = 0; i < 129; i++) {
+    for (int i = 0; i < layers[0]; i++) {
         res[i] = nnue_layer[i];
     }
 
@@ -74,7 +75,7 @@ int32_t main() {
             }
 
             if (i + 1 == cnt_layers) {
-                res[idx_res] = sigmoid(res[idx_res]);
+                res[idx_res] = tanh(res[idx_res]);
             }
 
             else {

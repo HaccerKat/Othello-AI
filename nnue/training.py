@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+from nn_init import Dataset, NeuralNetwork
 
 def load_136bit_samples(filename):
     with open(filename, 'rb') as f:
@@ -25,25 +26,7 @@ def load_136bit_samples(filename):
     labels = np.packbits(labels, axis = -1)
     return inputs, labels
 
-class Dataset(torch.utils.data.Dataset):
-    def __init__(self, inputs_uint8, labels_uint8, transform = None):
-        self.inputs_uint8 = inputs_uint8
-        self.labels_uint8 = labels_uint8
-        self.transform = transform
 
-    def __len__(self):
-        return len(self.inputs_uint8)
-
-    def __getitem__(self, idx):
-        X = torch.tensor(self.inputs_uint8[idx], dtype=torch.uint8)
-        y = torch.tensor(self.labels_uint8[idx], dtype=torch.uint8)
-        X = X.float()
-        y = y.float() / 128
-
-        if self.transform:
-            X = self.transform(X)
-
-        return X, y
 
 nnue_name = input()
 inputs, labels = load_136bit_samples("datasets/data_" + nnue_name + ".bin")
@@ -55,24 +38,6 @@ training_data, test_data = torch.utils.data.random_split(dataset, [0.8, 0.2])
 batch_size = 64
 train_dataloader = DataLoader(training_data, batch_size=batch_size)
 test_dataloader = DataLoader(test_data, batch_size=batch_size)
-
-class NeuralNetwork(nn.Module):
-    def __init__(self):
-        super().__init__()
-        # self.flatten = nn.Flatten()
-        self.linear_relu_stack = nn.Sequential(
-            nn.Linear(129, 256),
-            nn.ReLU(),
-            nn.Linear(256, 32),
-            nn.ReLU(),
-            nn.Linear(32, 1),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        # x = self.flatten(x)
-        logits = self.linear_relu_stack(x)
-        return logits
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {device} device")

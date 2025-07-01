@@ -31,10 +31,8 @@ int32_t main() {
     // 1 - white piece
     std::string nnue_name;
     std::cin >> nnue_name;
-    // Change later
-    // Used locally since cmake's working directory is in cmake-build-release
-    std::ifstream weights_file("/home/haccerkat/Documents/Programming/Projects/Othello-AI/nnue/models/weights_" + nnue_name + ".txt");
-    std::ifstream biases_file("/home/haccerkat/Documents/Programming/Projects/Othello-AI/nnue/models/biases_" + nnue_name + ".txt");
+    std::ifstream weights_file("./models/weights_" + nnue_name + ".txt");
+    std::ifstream biases_file("./models/biases_" + nnue_name + ".txt");
     double temp;
     int temp_idx = 0;
     while (weights_file >> temp) {
