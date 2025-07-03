@@ -19,19 +19,20 @@ from training_helper import train_loop, test_loop
 from simulate_games import simulate_game
 from multiprocessing_helper import execute_mp, execute_gpu
 
-learning_rate = 0.005
+learning_rate = 0.002
 BUFFER_START = 3
 # MCTS hyperparameters
 num_simulations = 100
-exploration_constant = math.sqrt(2)
+exploration_constant_training = 4
+exploration_constant_testing = math.sqrt(2)
 
 buffer = None
 def training_loop(generation, model, device):
     global buffer
     inputs_list, policies_list, values_list = [], [], []
     current_game = 0
-    num_games_to_simulate = 256
-    inference_batch_size = 32
+    num_games_to_simulate = 512
+    inference_batch_size = 64
     # guarantees equal number of games between control and experimental starting first
     assert num_games_to_simulate % (inference_batch_size * 2) == 0
     num_positions = 0
@@ -40,7 +41,7 @@ def training_loop(generation, model, device):
 
     model.eval()
     model.share_memory()
-    jobs = [(i, model, model, num_simulations, inference_batch_size, exploration_constant, 0.5) for i in range(num_games_to_simulate // inference_batch_size)]
+    jobs = [(i, model, model, num_simulations, inference_batch_size, exploration_constant_training, 0.5) for i in range(num_games_to_simulate // inference_batch_size)]
 
     print("Generating Games...")
     if device == "cpu":
@@ -88,32 +89,38 @@ def training_loop(generation, model, device):
     plt.title("Location of Crucial Moves")
     plt.show()
 
-    inputs = torch.tensor(inputs_list).to(device)
+    inputs = torch.tensor(inputs_list)
     inputs = torch.reshape(inputs, (-1, 2, 8, 8))
-    policies = torch.tensor(policies_list).to(device)
-    values = torch.tensor(values_list).to(device)
+    policies = torch.tensor(policies_list)
+    values = torch.tensor(values_list)
 
     dataset = Dataset(inputs, policies, values)
     training_data, test_data = torch.utils.data.random_split(dataset, [0.8, 0.2])
     if buffer is not None:
-        buffer_dataset, buffer = torch.utils.data.random_split(buffer, [0.3, 0.7])
-        discard_dataset, keep_dataset = torch.utils.data.random_split(buffer_dataset, [0.34, 0.66])
+        buffer_dataset, buffer = torch.utils.data.random_split(buffer, [0.5, 0.5])
+        # discard faster in earlier generations
+        x = max(0.2, 1.0 - 0.03 * generation)
+        discard_dataset, keep_dataset = torch.utils.data.random_split(buffer_dataset, [x, 1 - x])
         training_data = ConcatDataset([training_data, buffer_dataset])
         buffer = ConcatDataset([buffer, keep_dataset])
+        del discard_dataset
 
     BATCH_SIZE = 128
-    train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, shuffle=True)
-    test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True)
+    train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True)
+    test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True)
+
+    best_test_loss = float("inf")
+    patience = 1
+    patience_counter = 0
+    epochs = 2
 
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9)
-    best_test_loss = float("inf")
-    patience = 2
-    patience_counter = 0
-    epochs = 10
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=learning_rate, steps_per_epoch=len(train_dataloader), epochs=epochs)
+
     best_nn = None
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
-        train_loop(train_dataloader, model, optimizer, BATCH_SIZE)
+        train_loop(train_dataloader, model, optimizer, scheduler, BATCH_SIZE)
         policy_loss, value_loss, test_loss = test_loop(test_dataloader, model)
         if test_loss < best_test_loss:
             best_test_loss = test_loss
@@ -134,11 +141,12 @@ def training_loop(generation, model, device):
     else:
         buffer = ConcatDataset([buffer, dataset])
     torch.save(best_nn.state_dict(), 'models/model_weights_' + str(int(generation) + 1) + '.pth')
+    torch.cuda.empty_cache()
     return best_nn, best_policy_loss, best_value_loss, best_test_loss, patience == patience_counter, avg_entropy
 
-PLOT_MODULO = 3
+plot_modulo = 1
 def update_elo(generation, device):
-    control_model = load_model(NeuralNetwork, 'models/model_weights_' + str(generation - PLOT_MODULO) + '.pth')
+    control_model = load_model(NeuralNetwork, 'models/model_weights_' + str(generation - plot_modulo) + '.pth')
     experimental_model = load_model(NeuralNetwork, 'models/model_weights_' + str(generation) + '.pth')
     current_game = 0
 
@@ -152,7 +160,7 @@ def update_elo(generation, device):
     num_games_to_simulate = 256
     inference_batch_size = 32
     draws, control_wins, experimental_wins = 0, 0, 0
-    jobs = [(i, control_model, experimental_model, num_simulations, inference_batch_size, exploration_constant) for i in range(num_games_to_simulate // inference_batch_size)]
+    jobs = [(i, control_model, experimental_model, num_simulations, inference_batch_size, exploration_constant_testing) for i in range(num_games_to_simulate // inference_batch_size)]
 
     print("Simulating Games...")
     if device == "cpu":
@@ -240,6 +248,8 @@ def main():
             y_entropy_list = json_data['y_entropy_list']
             x_general_list = json_data['x_general_list']
             model = load_model(NeuralNetwork, 'models/model_weights_' + str(generation) + '.pth')
+        global buffer
+        buffer = torch.load('reload_tensor.pth')
     except (FileNotFoundError, json.JSONDecodeError):
         generation = 0
         elo = 0
@@ -253,26 +263,24 @@ def main():
         torch.save(model.state_dict(), './models/model_weights_0.pth')
 
     PATIENCE_EXCEEDED_COUNTER_LIMIT = 5
-    ELO_PATIENCE_EXCEEDED_LIMIT = 3
-    elo_patience = 0
-    # update_elo(generation, device)
     while True:
         start = time.perf_counter()
         print('---------------------------------' + "Training Generation " + str(generation + 1) + '---------------------------------')
         global learning_rate
         global num_simulations
-        if generation >= 5:
-            learning_rate = 0.002
+        global plot_modulo
+        if generation >= 6:
+            learning_rate = 0.0005
             num_simulations = 200
-        if generation >= 10:
-            learning_rate = 0.001
-            num_simulations = 300
-        if generation >= 25:
-            learning_rate = 0.0007
-            num_simulations = 400
-        if generation >= 50:
+            plot_modulo = 3
+        if generation >= 15:
             learning_rate = 0.0002
-            num_simulations = 600
+            num_simulations = 400
+            plot_modulo = 3
+        if generation >= 25:
+            learning_rate = 0.0001
+            num_simulations = 800
+            plot_modulo = 3
         bestNN, policy_loss, value_loss, test_loss, patience_exceeded, avg_entropy = training_loop(generation, model, device)
         model = bestNN
         patience_exceeded_counter += patience_exceeded
@@ -286,7 +294,7 @@ def main():
         y_validation_loss_list[1].append(policy_loss)
         y_validation_loss_list[2].append(value_loss)
         y_entropy_list[0].append(avg_entropy)
-        if generation % PLOT_MODULO == 0 and generation > 0:
+        if generation % plot_modulo == 0 and generation > 0:
             elo_gain = update_elo(generation, device)
             elo += elo_gain
             x_elo_list.append(generation)
@@ -312,15 +320,11 @@ def main():
         with open('reload_model_data.json', 'w') as f:
             json.dump(json_data, f, indent = 4)
 
+        global buffer
+        torch.save(buffer, 'reload_tensor.pth')
         duration = end - start
         print(f"Generation {generation} completed in {duration:.2f} seconds")
-        if generation % PLOT_MODULO == 0 and elo < 0:
-            elo_patience += 1
-            if elo_patience >= ELO_PATIENCE_EXCEEDED_LIMIT:
-                break
-        
-        else:
-            elo_patience = 0
+        print(torch.cuda.memory_allocated() / 1e6, "MB")
 
 if __name__ == "__main__":
     mp.set_start_method("spawn", force=True)

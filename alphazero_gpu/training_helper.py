@@ -3,18 +3,14 @@ import torch
 device = "cuda" if torch.cuda.is_available() else "cpu"
 def loss_fn(prediction, target):
     # could play around with the proportions later
-    # policy
     policy_loss = torch.sum(-target[0] * torch.nn.functional.log_softmax(prediction[0], dim=1), dim=1).mean()
-    # value
     value_loss = torch.nn.functional.mse_loss(prediction[1], target[1])
-    # print(f"Prediction: {prediction[1]}")
-    # print(f"Target: {target[1]}")
     return policy_loss, value_loss
 
-def train_loop(dataloader, model, optimizer, BATCH_SIZE):
+def train_loop(dataloader, model, optimizer, scheduler, BATCH_SIZE):
     size = len(dataloader.dataset)
     model.train()
-    fifths = size // BATCH_SIZE // 5
+    split_size = size // BATCH_SIZE // 20
     for batch, (input, policy, value) in enumerate(dataloader):
         input, policy, value = input.to(device), policy.to(device), value.to(device)
         prediction = model(input)
@@ -23,7 +19,8 @@ def train_loop(dataloader, model, optimizer, BATCH_SIZE):
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
-        if (batch + 1) % fifths == 0:
+        scheduler.step()
+        if (batch + 1) % split_size == 0:
             loss, current = loss.item(), batch * BATCH_SIZE
             policy_loss, value_loss = policy_loss.item(), value_loss.item()
             print(f"Loss: {loss:>7f} [{current:>5d}|{size:>5d}]")

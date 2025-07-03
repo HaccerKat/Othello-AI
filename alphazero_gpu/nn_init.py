@@ -49,20 +49,16 @@ import torch.nn.functional as F
 class BottleneckBlock(nn.Module):
     def __init__(self, channels):
         super(BottleneckBlock, self).__init__()
-        self.conv1 = nn.Conv2d(channels, channels, kernel_size=1)
+        self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
         self.bn1 = nn.BatchNorm2d(channels)
 
         self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, padding=1)
         self.bn2 = nn.BatchNorm2d(channels)
 
-        self.conv3 = nn.Conv2d(channels, channels, kernel_size=1)
-        self.bn3 = nn.BatchNorm2d(channels)
-
     def forward(self, x):
         identity = x
         out = F.relu(self.bn1(self.conv1(x)))
-        out = F.relu(self.bn2(self.conv2(out)))
-        out = self.bn3(self.conv3(out))
+        out = self.bn2(self.conv2(out))
         out += identity  # Skip connection
         return F.relu(out)
 
@@ -74,32 +70,29 @@ class NeuralNetwork(nn.Module):
         self.input_conv = nn.Conv2d(2, 64, kernel_size=3, padding=1)
         self.bn_input = nn.BatchNorm2d(64)
 
-        # 16 bottleneck blocks -> 48 conv layers
         self.res_blocks = nn.Sequential(
-            *[BottleneckBlock(64) for _ in range(16)]
+            *[BottleneckBlock(64) for _ in range(20)]
         )
 
-        # Policy head
-        self.policy_conv = nn.Conv2d(64, 2, kernel_size=1)
-        self.policy_fc = nn.Linear(2 * 8 * 8, 64)
+        self.policy_conv = nn.Conv2d(64, 8, kernel_size=1)
+        self.policy_bn = nn.BatchNorm2d(8)
+        self.policy_fc = nn.Linear(8 * 8 * 8, 64)
 
-        # Value head
-        self.value_conv = nn.Conv2d(64, 1, kernel_size=1)
-        self.value_fc1 = nn.Linear(8 * 8 * 1, 32)
-        self.value_fc2 = nn.Linear(32, 1)
+        self.value_conv = nn.Conv2d(64, 4, kernel_size=1)
+        self.value_bn = nn.BatchNorm2d(4)
+        self.value_fc1 = nn.Linear(4 * 8 * 8, 256)
+        self.value_fc2 = nn.Linear(256, 1)
 
     def forward(self, x):
         x = F.relu(self.bn_input(self.input_conv(x)))
 
         x = self.res_blocks(x)
 
-        # Policy head
-        policy = F.relu(self.policy_conv(x))
+        policy = F.relu(self.policy_bn(self.policy_conv(x)))
         policy = policy.view(policy.size(0), -1)
         policy = self.policy_fc(policy)
 
-        # Value head
-        value = F.relu(self.value_conv(x))
+        value = F.relu(self.value_bn(self.value_conv(x)))
         value = value.view(value.size(0), -1)
         value = F.relu(self.value_fc1(value))
         value = torch.tanh(self.value_fc2(value))
@@ -117,9 +110,9 @@ class Dataset(torch.utils.data.Dataset):
         return len(self.inputs_uint8)
 
     def __getitem__(self, idx):
-        inputs = self.inputs_uint8[idx].clone().detach().float()
-        policy = self.policy[idx].clone().detach()
-        value = self.value[idx].clone().detach()
+        inputs = self.inputs_uint8[idx].detach().float()
+        policy = self.policy[idx].detach()
+        value = self.value[idx].detach()
         if self.transform:
             inputs = self.transform(inputs)
 

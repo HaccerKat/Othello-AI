@@ -2,8 +2,8 @@ cmake_minimum_required(VERSION 3.31)
 project(Othello_AI)
 
 set(CMAKE_CXX_STANDARD 14)
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -H -Wall -O2 -Wextra -Wshadow -D_GLIBCXX_ASSERTIONS -DDEBUG -ggdb3 -fmax-errors=4")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -H -Wall -O3 -mavx2 -mfma -Wextra -Wshadow -D_GLIBCXX_ASSERTIONS -fsanitize=address -DDEBUG -ggdb3 -fmax-errors=4")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -H -Wall -O2 -Wextra -Wshadow -D_GLIBCXX_ASSERTIONS -DDEBUG -ggdb3 -fmax-errors=4")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -H -Wall -O3 -mavx2 -mfma -Wextra -Wshadow -D_GLIBCXX_ASSERTIONS -fsanitize=undefined,address -DDEBUG -ggdb3 -fmax-errors=4")
 
 include_directories(.)
 include_directories(nnue)
@@ -30,3 +30,5 @@ add_executable(Quantization_Test
 
 add_executable(Load_NNUE
         nnue/load_nnue.cpp)
+add_executable(Test
+        nnue/test.cpp)
