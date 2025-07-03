@@ -4,7 +4,6 @@ from nn_init import load_model
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-from scipy.interpolate import make_interp_spline
 from scipy.stats import entropy
 import time
 from torch.utils.data import ConcatDataset
@@ -17,7 +16,7 @@ import board_helper as bh
 from generate_games import generate_games
 from training_helper import train_loop, test_loop
 from simulate_games import simulate_game
-from multiprocessing_helper import execute_mp, execute_gpu
+from multiprocessing_helper import execute_gpu
 
 learning_rate = 0.002
 BUFFER_START = 3
@@ -99,7 +98,7 @@ def training_loop(generation, model, device):
     if buffer is not None:
         buffer_dataset, buffer = torch.utils.data.random_split(buffer, [0.5, 0.5])
         # discard faster in earlier generations
-        x = max(0.2, 1.0 - 0.03 * generation)
+        x = max(0.2, 1.0 - 0.04 * generation)
         discard_dataset, keep_dataset = torch.utils.data.random_split(buffer_dataset, [x, 1 - x])
         training_data = ConcatDataset([training_data, buffer_dataset])
         buffer = ConcatDataset([buffer, keep_dataset])
@@ -200,23 +199,6 @@ def update_elo(generation, device):
     elo_gain = 400 * math.log10(1 / (1 - experimental_wr) - 1)
     return elo_gain
 
-# def plot_smooth(x, y, generation, name):
-#     xnew = np.linspace(min(x), max(x), 300)
-#     spl = make_interp_spline(x, y, k=3)
-#     power_smooth = spl(xnew)
-#     plt.plot(xnew, power_smooth)
-#     if name == 'elo':
-#         plt.xlabel('Generation')
-#         plt.ylabel('Elo')
-#         plt.title('Elo vs. Generation')
-#     else:
-#         plt.xlabel('Generation')
-#         plt.ylabel('Validation Loss')
-#         plt.title('Validation Loss vs. Generation')
-#     plt.savefig('plots/' + name + '/generation_' + str(generation) + '.png')
-#     plt.clf()
-#     plt.close()
-
 def plot(x, y, labels, generation, title, folder_name):
     for i in range(len(y)):
         plt.plot(x, y[i], label=labels[i])
@@ -228,6 +210,7 @@ def plot(x, y, labels, generation, title, folder_name):
     plt.close()
 
 def main():
+    global buffer
     os.environ["OMP_NUM_THREADS"] = "1"
     os.environ["MKL_NUM_THREADS"] = "1"
     os.environ["NUMEXPR_NUM_THREADS"] = "1"
@@ -248,8 +231,6 @@ def main():
             y_entropy_list = json_data['y_entropy_list']
             x_general_list = json_data['x_general_list']
             model = load_model(NeuralNetwork, 'models/model_weights_' + str(generation) + '.pth')
-        global buffer
-        buffer = torch.load('reload_tensor.pth')
     except (FileNotFoundError, json.JSONDecodeError):
         generation = 0
         elo = 0
@@ -261,6 +242,11 @@ def main():
         x_general_list = []
         model = NeuralNetwork().to(device)
         torch.save(model.state_dict(), './models/model_weights_0.pth')
+
+    try:
+        buffer = torch.load('reload_tensor.pth')
+    except FileNotFoundError:
+        pass
 
     PATIENCE_EXCEEDED_COUNTER_LIMIT = 5
     while True:
@@ -277,7 +263,7 @@ def main():
             learning_rate = 0.0002
             num_simulations = 400
             plot_modulo = 3
-        if generation >= 25:
+        if generation >= 30:
             learning_rate = 0.0001
             num_simulations = 800
             plot_modulo = 3
@@ -320,8 +306,9 @@ def main():
         with open('reload_model_data.json', 'w') as f:
             json.dump(json_data, f, indent = 4)
 
-        global buffer
-        torch.save(buffer, 'reload_tensor.pth')
+        if generation > BUFFER_START:
+            torch.save(buffer, 'reload_tensor.pth')
+
         duration = end - start
         print(f"Generation {generation} completed in {duration:.2f} seconds")
         print(torch.cuda.memory_allocated() / 1e6, "MB")
