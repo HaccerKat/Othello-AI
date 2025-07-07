@@ -31,11 +31,10 @@ def simulate_game(parameters):
         # exploration_constant_multiplier = 3.0
         # if move_num >= 20:
         #     exploration_constant_multiplier = max(0.8, 3.0 - (move_num - 20) * 0.07)
-        exploration_constant_multiplier = 0.8
         if current_player == control_player:
-            new_boards = mcts_mp(boards, control_model, len(boards), False, True, num_simulations, exploration_constant * exploration_constant_multiplier)
+            new_boards = mcts_mp(boards, control_model, len(boards), False, True, num_simulations, exploration_constant)
         else:
-            new_boards = mcts_mp(boards, experimental_model, len(boards), False, True, num_simulations, exploration_constant * exploration_constant_multiplier)
+            new_boards = mcts_mp(boards, experimental_model, len(boards), False, True, num_simulations, exploration_constant)
             for board in boards:
                 sum_full_policy += board.get_full_policy()
                 sum_legal_moves += board.legal_moves
@@ -74,7 +73,7 @@ def main():
 
     nn_name_control = input("Enter the control's model name: ")
     nn_name_experimental = input("Enter the experimental's model name: ")
-    control_model = load_model(NeuralNetwork2, 'models/model_weights_' + nn_name_control + '.pth')
+    control_model = load_model(NeuralNetwork, 'models/model_weights_' + nn_name_control + '.pth')
     experimental_model = load_model(NeuralNetwork, 'models/model_weights_' + nn_name_experimental + '.pth')
     control_model.eval()
     experimental_model.eval()

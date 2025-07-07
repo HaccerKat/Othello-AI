@@ -18,20 +18,20 @@ from training_helper import train_loop, test_loop
 from simulate_games import simulate_game
 from multiprocessing_helper import execute_gpu
 
-learning_rate = 0.002
+learning_rate = 0.004
 BUFFER_START = 3
 # MCTS hyperparameters
 num_simulations = 100
-exploration_constant_training = 4
-exploration_constant_testing = math.sqrt(2)
+exploration_constant_training = 0 # dynamic
+exploration_constant_testing = 0.8
 
 buffer = None
 def training_loop(generation, model, device):
     global buffer
     inputs_list, policies_list, values_list = [], [], []
     current_game = 0
-    num_games_to_simulate = 512
-    inference_batch_size = 64
+    num_games_to_simulate = 2048
+    inference_batch_size = 128
     # guarantees equal number of games between control and experimental starting first
     assert num_games_to_simulate % (inference_batch_size * 2) == 0
     num_positions = 0
@@ -57,11 +57,6 @@ def training_loop(generation, model, device):
             sum_entropy += entropy(policy)
             num_positions += 1
             policy = torch.from_numpy(policy)
-            # position_string = format(player_board, '064b') + format(opponent_board, '064b')
-            # appends position_string as int array of 0s and 1s
-            # inputs_list.append(list(map(int, list(position_string))))
-            # policies_list.append(policy.tolist())
-            # values_list.append([value])
             for i in range(2):
                 for j in range(4):
                     position_string = format(player_board, '064b') + format(opponent_board, '064b')
@@ -96,22 +91,19 @@ def training_loop(generation, model, device):
     dataset = Dataset(inputs, policies, values)
     training_data, test_data = torch.utils.data.random_split(dataset, [0.8, 0.2])
     if buffer is not None:
-        buffer_dataset, buffer = torch.utils.data.random_split(buffer, [0.5, 0.5])
         # discard faster in earlier generations
-        x = max(0.2, 1.0 - 0.04 * generation)
-        discard_dataset, keep_dataset = torch.utils.data.random_split(buffer_dataset, [x, 1 - x])
-        training_data = ConcatDataset([training_data, buffer_dataset])
-        buffer = ConcatDataset([buffer, keep_dataset])
-        del discard_dataset
+        x = max(0.15, 1.0 - 0.06 * generation)
+        discard_dataset, buffer = torch.utils.data.random_split(buffer, [x, 1 - x])
+        training_data = ConcatDataset([training_data, buffer])
 
-    BATCH_SIZE = 128
+    BATCH_SIZE = 256
     train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, shuffle=True)
     test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True)
 
     best_test_loss = float("inf")
     patience = 1
     patience_counter = 0
-    epochs = 2
+    epochs = 3
 
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9)
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=learning_rate, steps_per_epoch=len(train_dataloader), epochs=epochs)
@@ -156,8 +148,8 @@ def update_elo(generation, device):
 
     sum_full_policy = np.zeros(64)
     sum_legal_moves = np.zeros(64)
-    num_games_to_simulate = 256
-    inference_batch_size = 32
+    num_games_to_simulate = 512
+    inference_batch_size = 64
     draws, control_wins, experimental_wins = 0, 0, 0
     jobs = [(i, control_model, experimental_model, num_simulations, inference_batch_size, exploration_constant_testing) for i in range(num_games_to_simulate // inference_batch_size)]
 
@@ -255,17 +247,20 @@ def main():
         global learning_rate
         global num_simulations
         global plot_modulo
-        if generation >= 6:
-            learning_rate = 0.0005
+        global exploration_constant_training
+        exploration_constant_training = 3 - generation * 0.15
+        if generation >= 3:
+            learning_rate = 0.001
             num_simulations = 200
             plot_modulo = 3
-        if generation >= 15:
-            learning_rate = 0.0002
+        if generation >= 10:
+            learning_rate = 0.0003
             num_simulations = 400
-            plot_modulo = 3
-        if generation >= 30:
+            exploration_constant_training = 1.5 - (generation - 10) * 0.03
+        if generation >= 20:
             learning_rate = 0.0001
-            plot_modulo = 3
+            num_simulations = 800
+            exploration_constant_training = 1.0
         bestNN, policy_loss, value_loss, test_loss, patience_exceeded, avg_entropy = training_loop(generation, model, device)
         model = bestNN
         patience_exceeded_counter += patience_exceeded

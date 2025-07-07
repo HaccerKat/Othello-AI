@@ -33,7 +33,7 @@ def execute_mp(func, jobs):
 
 def execute_gpu(func, jobs):
     start = time.perf_counter()
-    num_processes = 8
+    num_processes = min(len(jobs), 16)
     num_simulations = len(jobs)
     assert num_simulations % num_processes == 0, "Number of jobs must be divisible by number of processes"
     result_queue = mp.Queue()

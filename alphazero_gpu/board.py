@@ -2,10 +2,6 @@ import board_helper as bh
 import math
 import numpy as np
 import random
-import time
-import globals
-import torch
-
 
 class Board:
     def __init__(self, player_board, opponent_board, player, parent=None):
@@ -96,7 +92,7 @@ class Board:
         if not self.next_boards:
             self.next_boards.append((1, -1, Board(self.opponent_board, self.player_board, 1 - self.player, self)))
 
-        if self.parent == None and gameplay:
+        if self.parent == None and not gameplay:
             alpha = min(1.0, 10.0 / len(self.next_boards))
             epsilon = 0.25
             dirichlet = epsilon * np.random.dirichlet(np.ones(len(self.next_boards)) * alpha)
@@ -167,9 +163,7 @@ class Board:
             self.mcts_policy.append(child.visited_count / self.visited_count)
 
         points = bh.get_points(self.player_board) + bh.get_points(self.opponent_board)
-        if points < 6:
-            selection = random.choices(self.next_boards, k=1)[0]
-        elif points < 24 and not gameplay:
+        if points < 24:
             # random selection weighted using policy
             # using lists are faster than numpy arrays when doing random selection only once
             selection = random.choices(self.next_boards, weights=self.mcts_policy, k=1)[0]

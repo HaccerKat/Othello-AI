@@ -88,10 +88,13 @@ def generate_games(parameters):
         for i, board in boards_and_identifier:
             boards_only.append(board)
 
+        exploration_constant_multiplier = 0.8 + move_num * 0.03
+        if move_num >= 30:
+            exploration_constant_multiplier = max(0.8, 1.7 - (move_num - 30) * 0.06)
         if current_player == control_player:
-            new_boards = mcts_mp(boards_only, control_model, len(boards_only), False, False, num_simulations, exploration_constant)
+            new_boards = mcts_mp(boards_only, control_model, len(boards_only), False, False, num_simulations, exploration_constant * exploration_constant_multiplier)
         else:
-            new_boards = mcts_mp(boards_only, experimental_model, len(boards_only), False, False, num_simulations, exploration_constant)
+            new_boards = mcts_mp(boards_only, experimental_model, len(boards_only), False, False, num_simulations, exploration_constant * exploration_constant_multiplier)
 
         for i, board in boards_and_identifier:
             games[i].append((board.player, board.player_board, board.opponent_board, board.get_full_policy(), board.sum_eval / board.visited_count))
