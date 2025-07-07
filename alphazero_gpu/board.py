@@ -167,7 +167,7 @@ class Board:
             self.mcts_policy.append(child.visited_count / self.visited_count)
 
         points = bh.get_points(self.player_board) + bh.get_points(self.opponent_board)
-        if points < 8:
+        if points < 6:
             selection = random.choices(self.next_boards, k=1)[0]
         elif points < 24 and not gameplay:
             # random selection weighted using policy

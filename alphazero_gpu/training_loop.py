@@ -105,8 +105,8 @@ def training_loop(generation, model, device):
         del discard_dataset
 
     BATCH_SIZE = 128
-    train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True)
-    test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True, num_workers=4, pin_memory=True)
+    train_dataloader = DataLoader(training_data, batch_size=BATCH_SIZE, shuffle=True)
+    test_dataloader = DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True)
 
     best_test_loss = float("inf")
     patience = 1
@@ -265,7 +265,6 @@ def main():
             plot_modulo = 3
         if generation >= 30:
             learning_rate = 0.0001
-            num_simulations = 800
             plot_modulo = 3
         bestNN, policy_loss, value_loss, test_loss, patience_exceeded, avg_entropy = training_loop(generation, model, device)
         model = bestNN

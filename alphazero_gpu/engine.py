@@ -4,6 +4,7 @@ from mcts import mcts
 from board import Board
 import time
 import globals
+import numpy as np
 
 nn_name_control = input("Enter the control's model name: ")
 nn_name_experimental = input("Enter the experimental's model name: ")
@@ -25,11 +26,15 @@ if control_player == 1:
 # 1 - White
 start = time.perf_counter()
 board = Board(initial_player_board, initial_opponent_board, current_player)
+y = 1
 while not board.game_ends():
     if current_player == control_player:
-        (player_board, opponent_board) = mcts(board, control_model, True, True)
+        (player_board, opponent_board) = mcts(board, control_model, True, True, 1600, 0.64)
     else:
-        (player_board, opponent_board) = mcts(board, experimental_model, True, True)
+        (player_board, opponent_board) = mcts(board, experimental_model, True, True, 1600, 0.64)
+    policy = board.mcts_policy
+    x = np.argmax(policy)
+    y *= x
     current_player = 1 - current_player
     board = Board(player_board, opponent_board, current_player)
 
