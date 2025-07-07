@@ -96,54 +96,53 @@ void Experimental_Board::get_static_eval() {
 
     // constant optimize later
     auto start = std::chrono::high_resolution_clock::now();
-    // int16_t res_int[RES_SZ];
-    // for (int i = 0; i < LAYERS[0]; i++) {
-    //     res_int[i] = round(nnue_layer[i] * QUANT_MULT);
-    // }
-    //
-    // int idx_weights = 0, idx_biases = 0, idx_res = LAYERS[0];
-    // for (int i = 1; i < CNT_LAYERS; i++) {
-    //     // index of the start of the previous layer
-    //     int start_idx = idx_res - LAYERS[i - 1];
-    //     for (int j = 0; j < LAYERS[i]; j++) {
-    //         int acc = 0;
-    //         for (int k = 0; k < LAYERS[i - 1]; k++) {
-    //             acc += QUANT_WEIGHTS[idx_weights + k] * res_int[start_idx + k];
-    //         }
-    //
-    //         // __m128i sum = _mm_setzero_si128();
-    //         // for (int k = 0; k + 7 < LAYERS[i - 1]; k += 8) {
-    //         //     __m128i va = _mm_loadu_si128((__m128i const*)(QUANT_WEIGHTS + idx_weights + k));
-    //         //     __m128i vb = _mm_loadu_si128((__m128i const*)(res_int + start_idx + k));
-    //         //     __m128i products = _mm_madd_epi16(va, vb);
-    //         //     sum = _mm_add_epi32(sum, products);
-    //         // }
-    //         //
-    //         // alignas(16) int32_t tmp[4];
-    //         // _mm_store_si128((__m128i*)tmp, sum);
-    //         // acc = int(tmp[0]) + tmp[1] + tmp[2] + tmp[3];
-    //         //
-    //         // for (int k = (LAYERS[i - 1] / 8) * 8; k < LAYERS[i - 1]; k++) {
-    //         //     acc += QUANT_WEIGHTS[idx_weights + k] * res_int[start_idx + k];
-    //         // }
-    //
-    //         // std::cerr << acc << std::endl;
-    //         res_int[idx_res] = round(acc / QUANT_MULT) + QUANT_BIASES[idx_biases];
-    //         if (i + 1 == CNT_LAYERS) {
-    //             float val = res_int[idx_res] / QUANT_MULT;
-    //             eval = tanh(val) * (player == 1 ? -1 : 1);
-    //         }
-    //
-    //         // ReLU
-    //         else {
-    //             res_int[idx_res] = std::max((int16_t)0, res_int[idx_res]);
-    //         }
-    //
-    //         idx_weights += LAYERS[i - 1], idx_biases++, idx_res++;
-    //     }
-    // }
+    int16_t res_int[RES_SZ];
+    for (int i = 0; i < LAYERS[0]; i++) {
+        res_int[i] = round(nnue_layer[i] * QUANT_MULT);
+    }
 
-    eval = 0;
+    int idx_weights = 0, idx_biases = 0, idx_res = LAYERS[0];
+    for (int i = 1; i < CNT_LAYERS; i++) {
+        // index of the start of the previous layer
+        int start_idx = idx_res - LAYERS[i - 1];
+        for (int j = 0; j < LAYERS[i]; j++) {
+            int acc = 0;
+            for (int k = 0; k < LAYERS[i - 1]; k++) {
+                acc += QUANT_WEIGHTS[idx_weights + k] * res_int[start_idx + k];
+            }
+
+            // __m128i sum = _mm_setzero_si128();
+            // for (int k = 0; k + 7 < LAYERS[i - 1]; k += 8) {
+            //     __m128i va = _mm_loadu_si128((__m128i const*)(QUANT_WEIGHTS + idx_weights + k));
+            //     __m128i vb = _mm_loadu_si128((__m128i const*)(res_int + start_idx + k));
+            //     __m128i products = _mm_madd_epi16(va, vb);
+            //     sum = _mm_add_epi32(sum, products);
+            // }
+            //
+            // alignas(16) int32_t tmp[4];
+            // _mm_store_si128((__m128i*)tmp, sum);
+            // acc = int(tmp[0]) + tmp[1] + tmp[2] + tmp[3];
+            //
+            // for (int k = (LAYERS[i - 1] / 8) * 8; k < LAYERS[i - 1]; k++) {
+            //     acc += QUANT_WEIGHTS[idx_weights + k] * res_int[start_idx + k];
+            // }
+
+            // std::cerr << acc << std::endl;
+            res_int[idx_res] = round(acc / QUANT_MULT) + QUANT_BIASES[idx_biases];
+            if (i + 1 == CNT_LAYERS) {
+                float val = res_int[idx_res] / QUANT_MULT;
+                eval = tanh(val) * (player == 1 ? -1 : 1);
+            }
+
+            // ReLU
+            else {
+                res_int[idx_res] = std::max((int16_t)0, res_int[idx_res]);
+            }
+
+            idx_weights += LAYERS[i - 1], idx_biases++, idx_res++;
+        }
+    }
+
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
     sum_times += elapsed.count();

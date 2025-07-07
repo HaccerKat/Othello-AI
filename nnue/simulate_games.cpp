@@ -44,12 +44,12 @@ int simulate_game() {
         int x, y;
         if (current_player == 0) {
             board->find_next_boards();
-            std::tie(x, y) = get_best_move<Board*, int>(board, 0.1, 0);
+            std::tie(x, y) = get_best_move<Board*, int>(board, 0.03, 0);
         }
 
         else {
             experimental_board->find_next_boards();
-            std::tie(x, y) = get_best_move<Experimental_Board*, float>(experimental_board, 0.1, 1);
+            std::tie(x, y) = get_best_move<Experimental_Board*, float>(experimental_board, 0.03, 1);
         }
 
         // std::vector<int> prev_nnue_layer_vec = experimental_board->get_nnue_layer();
@@ -154,7 +154,7 @@ int32_t main() {
 
     // with multithreading
     constexpr int num_threads = 16;
-    const int num_games = 1000;
+    const int num_games = 500;
     int positions_generated = 0;
     // auto start = std::chrono::steady_clock::now();
     int board_wins = 0, experimental_wins = 0;

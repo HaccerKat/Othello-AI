@@ -30,5 +30,3 @@ add_executable(Quantization_Test
 
 add_executable(Load_NNUE
         nnue/load_nnue.cpp)
-add_executable(Test
-        nnue/test.cpp)
