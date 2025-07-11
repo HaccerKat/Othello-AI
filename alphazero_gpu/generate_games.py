@@ -81,17 +81,7 @@ def generate_games(parameters):
         # print("Full Game Generation Time:", globals.state['time_eval_2'])
         # print("Just Backpropagation Time:", globals.state['time_eval_3'])
 
-    position_importance = np.zeros(64)
-    cnt = np.zeros(64)
-    for player_board, opponent_board, policy, value in dataset:
-        for i in range(64):
-            if (player_board >> i) & 1:
-                position_importance[i] += value
-                cnt[i] += 1
-            if (opponent_board >> i) & 1:
-                position_importance[i] -= value
-                cnt[i] += 1
-    return dataset, position_importance, cnt
+    return dataset
 
 # this is used for generating games for nnue distillation, so the settings are set for that
 def main():
@@ -115,17 +105,17 @@ def main():
         experimental_model.eval()
         control_model.share_memory()
         experimental_model.share_memory()
-        num_games_to_generate = 2048
+        num_games_to_generate = 1024
         start = time.perf_counter()
-        inference_batch_size = 256
+        inference_batch_size = 128
         num_simulations = 800
         exploration_constant = 0.8
         jobs = [(i, control_model, experimental_model, num_simulations, inference_batch_size, exploration_constant, 0.0) for
                 i in range(num_games_to_generate // inference_batch_size)]
 
         print("Generating Games...")
-        games = execute_gpu(generate_games, jobs)
-        for dataset, position_importance, cnt in games:
+        batches = execute_gpu(generate_games, jobs)
+        for dataset in batches:
             for player_board, opponent_board, policy, value in dataset:
                 with open('datasets/features.bin', 'ab') as f, open('datasets/values.txt', 'a') as g:
                     for _ in range(2): # swap player and opponent's pieces

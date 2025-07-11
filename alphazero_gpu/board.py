@@ -17,8 +17,6 @@ class Board:
         self.visited_count = 0  # N(s) and N(s, a) in PUCT
         self.sum_eval = 0  # Divide by visited_count to get Q(s, a) in PUCT
         self.mcts_policy = []
-        self.full_policy = np.zeros(64)
-        self.legal_moves = np.zeros(64)
 
     def print(self):
         print("Board State:")
@@ -36,11 +34,9 @@ class Board:
             test2.append(child.sum_eval / child.visited_count)
             sum += policy_value
         print(f"NN Policy: {test}")
+        print(f"Full NN Policy: {self.policy_head}")
         print(f"Sum NN Policy (Closer to 1 is better):", sum)
-        # print(f"Full NN Policy: {self.policy_head}")
         print(f"MCTS Value Head: {test2}")
-        self.get_full_policy()
-        print(f"Full Policy: {self.full_policy}")
         print("---------------------------------------------")
 
     def find_next_boards(self, mode):
@@ -163,19 +159,19 @@ class Board:
             selection = self.next_boards[index]
 
         # child board states of the selection
-        return selection[2].player_board, selection[2].opponent_bo
+        return selection[2].player_board, selection[2].opponent_board
 
     def get_full_policy(self):
         index = 0
         sum_values = 0
+        full_policy = np.zeros(64)
         for policy_value, move, child in self.next_boards:
-            self.full_policy[move] += self.mcts_policy[index]
-            self.legal_moves[move] = 1
-            sum_values += self.full_policy[move]
+            full_policy[move] += self.mcts_policy[index]
+            sum_values += full_policy[move]
             index += 1
         if sum_values > 0:
-            self.full_policy /= sum_values
+            full_policy /= sum_values
         else:
             # indicates a skip turn and not to add in dataset
-            self.full_policy[0] = -1
-        return self.full_policy
+            full_policy[0] = -1
+        return full_policy

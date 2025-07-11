@@ -1,8 +1,6 @@
 import random
 import time
 import math
-import numpy as np
-import matplotlib.pyplot as plt
 import torch
 import torch.multiprocessing as mp
 import os
@@ -12,7 +10,7 @@ from board import Board
 from nn_init import NeuralNetwork, load_model
 from multiprocessing_helper import execute_gpu
 
-def simulate_game(parameters):
+def simulate_games(parameters):
     identifier, control_model, experimental_model, num_simulations, num_games, exploration_constant = parameters
     control_player = random.randint(0, 1)
     current_player = 0
@@ -22,8 +20,6 @@ def simulate_game(parameters):
         initial_player_board = 0x0000000810000000
         initial_opponent_board = 0x00000001008000000
     boards = [Board(initial_player_board, initial_opponent_board, current_player) for _ in range(num_games)]
-    sum_full_policy = np.zeros(64)
-    sum_legal_moves = np.zeros(64)
     draws, control_wins, experimental_wins = 0, 0, 0
     move_num = 0
     while boards:
@@ -31,9 +27,6 @@ def simulate_game(parameters):
             new_boards = mcts_mp(boards, control_model, len(boards), False, 1, num_simulations, exploration_constant)
         else:
             new_boards = mcts_mp(boards, experimental_model, len(boards), False, 1, num_simulations, exploration_constant)
-            for board in boards:
-                sum_full_policy += board.get_full_policy()
-                sum_legal_moves += board.legal_moves
 
         current_player = 1 - current_player
         boards = []
@@ -53,7 +46,7 @@ def simulate_game(parameters):
 
         move_num += 1
         print("At move number:", move_num)
-    return draws, control_wins, experimental_wins, sum_full_policy, sum_legal_moves
+    return draws, control_wins, experimental_wins
 
 # 0 - Black
 # 1 - White
@@ -74,8 +67,6 @@ def main():
     start = time.perf_counter()
     current_game = 0
 
-    sum_full_policy = np.zeros(64)
-    sum_legal_moves = np.zeros(64)
     num_games_to_simulate = int(input("Enter the number of games: "))
     inference_batch_size = 32
     num_simulations = 800
@@ -84,15 +75,13 @@ def main():
     jobs = [(i, control_model, experimental_model, num_simulations, inference_batch_size, exploration_constant) for i in range(num_games_to_simulate // inference_batch_size)]
 
     print("Simulating Games...")
-    games = execute_gpu(simulate_game, jobs)
+    games = execute_gpu(simulate_games, jobs)
 
-    for result_draws, result_control_wins, result_experimental_wins, full_policy, legal_moves in games:
+    for result_draws, result_control_wins, result_experimental_wins in games:
         draws += result_draws
         control_wins += result_control_wins
         experimental_wins += result_experimental_wins
         current_game += 1
-        sum_full_policy += full_policy
-        sum_legal_moves += legal_moves
 
     avg_score = (1.0 * experimental_wins + 0.5 * draws) / num_games_to_simulate
     error = 1.96 * math.sqrt(avg_score * (1 - avg_score) / num_games_to_simulate)
@@ -103,13 +92,6 @@ def main():
     print("Number of Experimental Wins:", experimental_wins)
     print("Experimental WR: " + str(avg_score * 100.0) + "%")
     print("95% Confidence Interval: [" + str(lower_bound) + "%, " + str(upper_bound) + "%]")
-
-    avg_full_policy = sum_full_policy / (sum_legal_moves + 1)
-    print("Control Avg Full Policy:")
-    plt.imshow(avg_full_policy.reshape(8, 8), cmap='Reds')
-    plt.colorbar()
-    plt.show()
-
     end = time.perf_counter()
     print("Execution time (s):", end - start)
 

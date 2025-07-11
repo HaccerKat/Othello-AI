@@ -1,7 +1,6 @@
 import torch
 from torch.utils.data import DataLoader
 from nn_init import load_model
-import numpy as np
 import math
 import matplotlib.pyplot as plt
 from scipy.stats import entropy
@@ -15,7 +14,7 @@ from nn_init import NeuralNetwork, Dataset
 import board_helper as bh
 from generate_games import generate_games
 from training_helper import train_loop, test_loop
-from simulate_games import simulate_game
+from simulate_games import simulate_games
 from multiprocessing_helper import execute_gpu
 
 learning_rate = 0.004
@@ -49,8 +48,6 @@ def training_loop(generation, model, device):
     else:
         batches = execute_gpu(generate_games, jobs)
 
-    total_position_importance = np.zeros(64)
-    total_cnt = np.zeros(64)
     for batch, position_importance, cnt in batches:
         for player_board, opponent_board, policy, value in batch:
             # since the size of the group of symmetrical boards is 8
@@ -60,7 +57,6 @@ def training_loop(generation, model, device):
             for i in range(2):
                 for j in range(4):
                     position_string = format(player_board, '064b') + format(opponent_board, '064b')
-                    # appends position_string as int array of 0s and 1s
                     inputs_list.append(list(map(int, list(position_string))))
                     policies_list.append(policy.tolist())
                     values_list.append([value])
@@ -72,16 +68,8 @@ def training_loop(generation, model, device):
                 policy = bh.horizontal_mirror_image_policy(policy)
 
         current_game += 1
-        total_position_importance += position_importance
-        total_cnt += cnt
 
     avg_entropy = sum_entropy / num_positions
-
-    total_position_importance /= total_cnt
-    plt.imshow(total_position_importance.reshape(8, 8), cmap='Reds')
-    plt.colorbar()
-    plt.title("Location of Crucial Moves")
-    plt.show()
 
     inputs = torch.tensor(inputs_list)
     inputs = torch.reshape(inputs, (-1, 2, 8, 8))
@@ -146,8 +134,6 @@ def update_elo(generation, device):
     experimental_model.eval()
     experimental_model.share_memory()
 
-    sum_full_policy = np.zeros(64)
-    sum_legal_moves = np.zeros(64)
     num_games_to_simulate = 512
     inference_batch_size = 64
     draws, control_wins, experimental_wins = 0, 0, 0
@@ -158,15 +144,13 @@ def update_elo(generation, device):
         # games = execute_mp(simulate_game, jobs)
         pass
     else:
-        games = execute_gpu(simulate_game, jobs)
+        games = execute_gpu(simulate_games, jobs)
 
-    for result_draws, result_control_wins, result_experimental_wins, full_policy, legal_moves in games:
+    for result_draws, result_control_wins, result_experimental_wins in games:
         draws += result_draws
         control_wins += result_control_wins
         experimental_wins += result_experimental_wins
         current_game += 1
-        sum_full_policy += full_policy
-        sum_legal_moves += legal_moves
 
     avg_score = (1.0 * experimental_wins + 0.5 * draws) / num_games_to_simulate
     error = 1.96 * math.sqrt(avg_score * (1 - avg_score) / num_games_to_simulate)
@@ -177,14 +161,6 @@ def update_elo(generation, device):
     print("Number of Experimental Wins:", experimental_wins)
     print("Experimental WR: " + str(avg_score * 100.0) + "%")
     print("95% Confidence Interval: [" + str(lower_bound) + "%, " + str(upper_bound) + "%]")
-
-    avg_full_policy = sum_full_policy / (sum_legal_moves + 0.0001)
-    plt.imshow(avg_full_policy.reshape(8, 8), cmap='Reds')
-    plt.colorbar()
-    plt.title("Location of Crucial Moves")
-    plt.savefig('plots/crucial_moves/generation_' + str(generation) + '.png')
-    plt.clf()
-    plt.close()
 
     elo_gain = 400 * math.log10(1 / (1 - avg_score) - 1)
     return elo_gain
@@ -259,6 +235,7 @@ def main():
             learning_rate = 0.0001
             num_simulations = 800
             exploration_constant_training = 1.0
+
         bestNN, policy_loss, value_loss, test_loss, patience_exceeded, avg_entropy = training_loop(generation, model, device)
         model = bestNN
         patience_exceeded_counter += patience_exceeded
