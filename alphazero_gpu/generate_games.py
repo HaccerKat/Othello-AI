@@ -115,9 +115,9 @@ def main():
 
         print("Generating Games...")
         batches = execute_gpu(generate_games, jobs)
-        for dataset in batches:
-            for player_board, opponent_board, policy, value in dataset:
-                with open('datasets/features.bin', 'ab') as f, open('datasets/values.txt', 'a') as g:
+        with open('datasets/features.bin', 'ab') as f, open('datasets/values.txt', 'a') as g:
+            for dataset in batches:
+                for player_board, opponent_board, policy, value in dataset:
                     for _ in range(2): # swap player and opponent's pieces
                         for i in range(2): # flip horizontally
                             for j in range(4): # rotate 90 degrees
