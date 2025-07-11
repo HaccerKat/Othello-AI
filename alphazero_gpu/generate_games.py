@@ -101,7 +101,7 @@ def main():
 
     torch.set_num_threads(1)
 
-    model_numbers = [369]
+    model_numbers = [75]
     # open('datasets/features.bin', 'wb')
     # open('datasets/values.txt', 'w')
     while True:
