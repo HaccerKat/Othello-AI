@@ -27,9 +27,9 @@ def batch_inference(boards, model, num_games):
     end = time.perf_counter()
     globals.state['time_eval'] += end - start
 
-def mcts(root, model, debug=False, gameplay = False, num_simulations=100, exploration_constant=math.sqrt(2)):
+def mcts(root, model, debug, mode, num_simulations, exploration_constant):
     batch_inference([root], model, 1)
-    root.find_next_boards(gameplay)
+    root.find_next_boards(mode)
     for i in range(num_simulations):
         node = root
         while not node.game_ends():
@@ -42,18 +42,18 @@ def mcts(root, model, debug=False, gameplay = False, num_simulations=100, explor
                 node = node.select(exploration_constant)
 
         batch_inference([node], model, 1)
-        node.backpropagate(gameplay)
+        node.backpropagate(mode)
 
-    result = root.get_next_board(gameplay)
+    result = root.get_next_board(mode)
     if debug:
         root.print()
 
     return result
 
-def mcts_mp(roots, model, num_games, debug=False, gameplay = False, num_simulations=100, exploration_constant=math.sqrt(2)):
+def mcts_mp(roots, model, num_games, debug, mode, num_simulations, exploration_constant):
     batch_inference(roots, model, num_games)
     for root in roots:
-        root.find_next_boards(gameplay)
+        root.find_next_boards(mode)
     for _ in range(num_simulations):
         # shallow copy of the roots array
         nodes = roots[:]
@@ -70,12 +70,12 @@ def mcts_mp(roots, model, num_games, debug=False, gameplay = False, num_simulati
         batch_inference(nodes, model, num_games)
         start = time.perf_counter()
         for i in range(num_games):
-            nodes[i].backpropagate(gameplay)
+            nodes[i].backpropagate(mode)
 
         end = time.perf_counter()
         globals.state['time_eval_3'] += end - start
 
     results = [None] * num_games
     for i in range(num_games):
-        results[i] = roots[i].get_next_board(gameplay)
+        results[i] = roots[i].get_next_board(mode)
     return results

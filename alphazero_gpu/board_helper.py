@@ -1,6 +1,4 @@
 import torch
-import time
-import globals
 import numpy as np
 def print_board(board):
     for i in range(8):

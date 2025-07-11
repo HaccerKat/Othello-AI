@@ -55,12 +55,3 @@ def execute_gpu(func, jobs):
     end = time.perf_counter()
     print(f"Executed {num_simulations} jobs in {end - start:.2f} seconds")
     return results
-
-# def execute_gpu(func, jobs):
-#     start = time.perf_counter()
-#     results = []
-#     for job in jobs:
-#         results.append(func(job))
-#     end = time.perf_counter()
-#     print(f"Executed {len(jobs)} jobs in {end - start:.2f} seconds")
-#     return results

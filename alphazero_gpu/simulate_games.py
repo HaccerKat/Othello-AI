@@ -9,8 +9,7 @@ import os
 
 from mcts import mcts_mp
 from board import Board
-import board_helper as bh
-from nn_init import NeuralNetwork, NeuralNetwork2, load_model
+from nn_init import NeuralNetwork, load_model
 from multiprocessing_helper import execute_gpu
 
 def simulate_game(parameters):
@@ -28,24 +27,18 @@ def simulate_game(parameters):
     draws, control_wins, experimental_wins = 0, 0, 0
     move_num = 0
     while boards:
-        # exploration_constant_multiplier = 3.0
-        # if move_num >= 20:
-        #     exploration_constant_multiplier = max(0.8, 3.0 - (move_num - 20) * 0.07)
         if current_player == control_player:
-            new_boards = mcts_mp(boards, control_model, len(boards), False, True, num_simulations, exploration_constant)
+            new_boards = mcts_mp(boards, control_model, len(boards), False, 1, num_simulations, exploration_constant)
         else:
-            new_boards = mcts_mp(boards, experimental_model, len(boards), False, True, num_simulations, exploration_constant)
+            new_boards = mcts_mp(boards, experimental_model, len(boards), False, 1, num_simulations, exploration_constant)
             for board in boards:
                 sum_full_policy += board.get_full_policy()
                 sum_legal_moves += board.legal_moves
 
-        # print("Sum full policy:", sum_full_policy)
-        # print("Sum legal moves:", sum_legal_moves)
         current_player = 1 - current_player
         boards = []
         for player_board, opponent_board in new_boards:
             board = Board(player_board, opponent_board, current_player)
-            # bh.print_both_boards(player_board, opponent_board)
             current_is_control = current_player == control_player
             if board.game_ends():
                 winner = board.get_winner()
@@ -85,7 +78,7 @@ def main():
     sum_legal_moves = np.zeros(64)
     num_games_to_simulate = int(input("Enter the number of games: "))
     inference_batch_size = 32
-    num_simulations = 100
+    num_simulations = 800
     exploration_constant = 0.8
     draws, control_wins, experimental_wins = 0, 0, 0
     jobs = [(i, control_model, experimental_model, num_simulations, inference_batch_size, exploration_constant) for i in range(num_games_to_simulate // inference_batch_size)]
@@ -101,16 +94,14 @@ def main():
         sum_full_policy += full_policy
         sum_legal_moves += legal_moves
 
-    num_games_to_simulate -= draws
-    experimental_WR = experimental_wins / num_games_to_simulate
-    probability = 1.0 * experimental_wins / num_games_to_simulate
-    error = 1.96 * math.sqrt(probability * (1 - probability) / num_games_to_simulate)
-    lower_bound = 100.0 * (probability - error)
-    upper_bound = 100.0 * (probability + error)
+    avg_score = (1.0 * experimental_wins + 0.5 * draws) / num_games_to_simulate
+    error = 1.96 * math.sqrt(avg_score * (1 - avg_score) / num_games_to_simulate)
+    lower_bound = 100.0 * (avg_score - error)
+    upper_bound = 100.0 * (avg_score + error)
     print("Number of Draws:", draws)
     print("Number of Control Wins:", control_wins)
     print("Number of Experimental Wins:", experimental_wins)
-    print("Experimental WR: " + str(experimental_WR * 100.0) + "%")
+    print("Experimental WR: " + str(avg_score * 100.0) + "%")
     print("95% Confidence Interval: [" + str(lower_bound) + "%, " + str(upper_bound) + "%]")
 
     avg_full_policy = sum_full_policy / (sum_legal_moves + 1)

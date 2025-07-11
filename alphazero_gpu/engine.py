@@ -29,9 +29,9 @@ board = Board(initial_player_board, initial_opponent_board, current_player)
 y = 1
 while not board.game_ends():
     if current_player == control_player:
-        (player_board, opponent_board) = mcts(board, control_model, True, True, 1600, 0.64)
+        (player_board, opponent_board) = mcts(board, control_model, True, 0, 800, 0.8)
     else:
-        (player_board, opponent_board) = mcts(board, experimental_model, True, True, 1600, 0.64)
+        (player_board, opponent_board) = mcts(board, experimental_model, True, 0, 800, 0.8)
     policy = board.mcts_policy
     x = np.argmax(policy)
     y *= x

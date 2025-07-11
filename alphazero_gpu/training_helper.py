@@ -45,7 +45,6 @@ def test_loop(dataloader, model):
     policy_loss /= num_batches
     value_loss /= num_batches
     test_loss = policy_loss + value_loss
-    # print(f"Test Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg Loss: {test_loss:>8f} \n")
     print("----------------------------------------------------------------")
     print(f"Avg Loss: {test_loss:>8f}")
     print(f"Policy Loss: {policy_loss:>8f}")

@@ -8,7 +8,6 @@ def load_128bit_samples(filename):
         raw = np.frombuffer(f.read(), dtype=np.uint8)
 
     all_bits = np.unpackbits(raw)
-    # Each sample = 128 bits (128 inputs)
     num_samples = all_bits.size // 128
 
     inputs = all_bits.reshape((num_samples, 128))
@@ -33,6 +32,7 @@ learning_rate = 0.002
 model = NeuralNetworkNNUE()
 loss_fn = torch.nn.MSELoss()
 
+# CPU training since this is a small model
 def train_loop(dataloader, model, loss_fn, optimizer):
     size = len(dataloader.dataset)
     model.train()
@@ -57,7 +57,6 @@ def test_loop(dataloader, model, loss_fn):
             test_loss += loss_fn(prediction, value).item()
 
     test_loss /= num_batches
-    # print(f"Test Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg Loss: {test_loss:>8f} \n")
     print(f"Avg Loss: {test_loss:>8f} \n")
     return test_loss
 
@@ -71,6 +70,7 @@ for t in range(epochs):
     optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate, weight_decay=1e-4, momentum=0.9)
     train_loop(train_dataloader, model, loss_fn, optimizer)
     test_loss = test_loop(test_dataloader, model, loss_fn)
+    torch.save(model.state_dict(), 'models_nnue/model_weights_' + str(t + 1) + '_.pth')
     if test_loss < best_val_loss:
         best_val_loss = test_loss
         bestNN = model
@@ -84,4 +84,4 @@ for t in range(epochs):
         if epochs_without_improvement >= patience:
             break  # early stopping
 
-torch.save(bestNN.state_dict(), 'models/model_weights_1.pth')
+torch.save(bestNN.state_dict(), 'models_nnue/best.pth')

@@ -168,16 +168,14 @@ def update_elo(generation, device):
         sum_full_policy += full_policy
         sum_legal_moves += legal_moves
 
-    num_games_to_simulate -= draws
-    experimental_wr = experimental_wins / num_games_to_simulate
-    probability = 1.0 * experimental_wins / num_games_to_simulate
-    error = 1.96 * math.sqrt(probability * (1 - probability) / num_games_to_simulate)
-    lower_bound = 100.0 * (probability - error)
-    upper_bound = 100.0 * (probability + error)
+    avg_score = (1.0 * experimental_wins + 0.5 * draws) / num_games_to_simulate
+    error = 1.96 * math.sqrt(avg_score * (1 - avg_score) / num_games_to_simulate)
+    lower_bound = 100.0 * (avg_score - error)
+    upper_bound = 100.0 * (avg_score + error)
     print("Number of Draws:", draws)
     print("Number of Control Wins:", control_wins)
     print("Number of Experimental Wins:", experimental_wins)
-    print("Experimental WR: " + str(experimental_wr * 100.0) + "%")
+    print("Experimental WR: " + str(avg_score * 100.0) + "%")
     print("95% Confidence Interval: [" + str(lower_bound) + "%, " + str(upper_bound) + "%]")
 
     avg_full_policy = sum_full_policy / (sum_legal_moves + 0.0001)
@@ -188,7 +186,7 @@ def update_elo(generation, device):
     plt.clf()
     plt.close()
 
-    elo_gain = 400 * math.log10(1 / (1 - experimental_wr) - 1)
+    elo_gain = 400 * math.log10(1 / (1 - avg_score) - 1)
     return elo_gain
 
 def plot(x, y, labels, generation, title, folder_name):
